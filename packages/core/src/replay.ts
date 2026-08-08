@@ -116,7 +116,7 @@ export class ReplayAdapter implements ProviderAdapter {
       if (existsSync(path))
         return (JSON.parse(readFileSync(path, 'utf8')) as { totalTokens: number }).totalTokens
       // Token counting is advisory, not semantic: a missing fixture falls back
-      // to the same chars/4 estimate the context manager uses between counts,
+      // to the same heuristic estimate the context manager uses between counts,
       // rather than failing a replay run over an unrecorded probe.
       return estimateTokens(system, messages, tools)
     }
@@ -206,15 +206,50 @@ function replayStreamCallbacks(content: ContentBlock[], req: StreamRequest): voi
   }
 }
 
-/** chars/4 — the same cheap estimate the context manager uses between real counts. */
+/**
+ * The cheap token estimate the context manager uses between real `countTokens`
+ * calls.
+ *
+ * NOT a flat chars/4. Measured against Gemini's own counter (`pnpm metrics`),
+ * one divisor is wrong in the direction that matters:
+ *
+ *   prose only          ~4.1 chars/token   (a flat chars/4 was 3% low)
+ *   JSON tool results   ~2.6 chars/token   (a flat chars/4 was 25% low)
+ *
+ * Prose tokenises at roughly four characters per token; serialised JSON does
+ * not, because every brace, quote, colon and escape tends to cost a token of
+ * its own. Underestimating is the dangerous direction — it is how a window
+ * sails past its budget while believing it is inside it — and tool results are
+ * the bulk of a real history, so text and structured content get separate
+ * divisors.
+ */
+const CHARS_PER_TOKEN_PROSE = 4.1
+const CHARS_PER_TOKEN_JSON = 2.6
+
 export function estimateTokens(
   system: string,
   messages: CanonicalMessage[],
   tools: ToolDef[],
 ): number {
-  const chars =
-    system.length +
-    stableStringify(messages).length +
-    stableStringify(tools.map((t) => t.inputSchema)).length
-  return Math.ceil(chars / 4)
+  let proseChars = system.length
+  let jsonChars = stableStringify(tools.map((t) => t.inputSchema)).length
+
+  for (const message of messages) {
+    for (const block of message.content) {
+      switch (block.type) {
+        case 'text':
+        case 'thought_summary':
+          proseChars += block.text.length
+          break
+        case 'tool_result':
+          jsonChars += block.content.length + block.name.length
+          break
+        case 'tool_use':
+          jsonChars += stableStringify(block.input).length + block.name.length
+          break
+      }
+    }
+  }
+
+  return Math.ceil(proseChars / CHARS_PER_TOKEN_PROSE + jsonChars / CHARS_PER_TOKEN_JSON)
 }

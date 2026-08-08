@@ -30,16 +30,17 @@ command. Nothing here is an estimate.
 
 | metric | value | reproduce |
 | --- | --- | --- |
-| Eval pass rate | **PASS_RATE** | `pnpm eval` |
+| Eval pass rate | **46 / 46 (100%)** | `pnpm eval` |
 | Injection block rate | **100%** (6/6) | `pnpm injection:report` |
-| Context-cache token savings | **CACHE_ALL** overall, **CACHE_STEADY** steady state | `pnpm cache:report` |
-| Cost saved by caching | **COST_SAVED** | `pnpm cache:report` |
-| Median / p95 turn latency | **MEDIAN_LAT** / **P95_LAT** | `pnpm eval` |
-| Median cost per eval task | **MEDIAN_COST** (list price) | `pnpm eval` |
-| Context estimate error vs `countTokens` | **EST_ERROR** | `pnpm eval` |
-| Tests | **TEST_COUNT** across TEST_FILES files, no API key needed | `pnpm test` |
+| Context-cache token savings | **65.6%** overall, **61.0%** steady state | `pnpm cache:report` |
+| Context-cache savings across the eval run | **80.6%** of prompt tokens (46 tasks) | `pnpm eval` |
+| Cost saved by caching | **51.7%** | `pnpm cache:report` |
+| Median / p95 turn latency | **15.2 s** / **23.5 s** | `pnpm eval` |
+| Median cost per eval task | **$0.0105** (list price) | `pnpm eval` |
+| Context estimate error vs `countTokens` | **3.2% mean absolute** | `pnpm metrics` |
+| Tests | **109** across 9 files, no API key and no network | `pnpm test` |
 | Tools | 12 | `pnpm cli` then `/help` |
-| Core loop | **LOOP_LOC lines** (`packages/core/src/loop.ts`) | — |
+| Core loop | **375 lines** of code (`packages/core/src/loop.ts`, 472 with comments) | `pnpm metrics` |
 
 Cost figures are list-price estimates from `packages/core/src/pricing.ts`, read
 from Google's published Vertex pricing. They are useful as *relative* numbers —
@@ -271,8 +272,26 @@ the six most recent groups. `context.test.ts` asserts that every surviving
 `tool_use` still has its matching `tool_result`.
 
 Token counting uses the real `countTokens` at turn start and after eviction, and
-a `chars/4` estimate in between. Both are traced, so the estimate's error is a
-measured number rather than a claim.
+a heuristic estimate in between. Both are traced, so the estimate's error is a
+measured number rather than a claim — and measuring it changed the estimator.
+
+A flat `chars/4`, the usual rule of thumb, is wrong in the direction that
+matters:
+
+| history | `chars/4` estimate | real | error |
+| --- | --- | --- | --- |
+| 1 turn, prose only | 3,797 | 3,918 | −3.1% |
+| 1 turn with a tool result | 9,690 | 11,930 | −18.8% |
+| 4 turns | 27,440 | 35,993 | −23.8% |
+| 12 turns | 74,774 | 100,165 | **−25.3%** |
+
+Prose tokenises at roughly four characters per token. Serialised JSON does not —
+every brace, quote, colon and escape tends to cost a token of its own — and tool
+results are the bulk of a real history. Underestimating by a quarter is how a
+window sails past its budget while believing it is inside it. Counting text and
+structured content with separate divisors (≈4.1 and ≈2.6 chars/token) takes the
+mean absolute error from **17.7% to 3.2%**, and the long histories that actually
+approach the budget land within 0.4%.
 
 ---
 

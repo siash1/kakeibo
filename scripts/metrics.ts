@@ -69,7 +69,7 @@ async function main(): Promise<void> {
   // estimate between counts. This measures how wrong the cheap estimate is over
   // histories built from actual ledger content, which is the only fair test —
   // JSON-heavy tool results tokenise very differently from prose.
-  console.log('\n  context estimate error (chars/4 vs real countTokens)')
+  console.log('\n  context estimate error (heuristic vs real countTokens)')
   const adapter = new GeminiAdapter()
   const manager = new ContextManager()
   const tools = registry.declarations()
