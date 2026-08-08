@@ -28,6 +28,7 @@ own statement exists, works, and is deliberately secondary.
 | Tenant isolation | Explicit `ownerId` scoping **plus** Postgres RLS as a backstop |
 | Demo ledger provisioning | Lazy per-visitor clone on first ledger-needing request; anonymous expires in 24h |
 | Confirm-before-write gate | Loop becomes **suspendable** (see §6) |
+| Admin | Single-operator dashboard at `/admin`, allowlist by email (see §9) |
 
 ### Success criteria
 
@@ -117,6 +118,18 @@ suspended_turns        id uuid pk, conversation_id uuid fk, owner_id uuid fk,
 rate_limits            key text pk,            -- sha256(ip + daily_salt)
                        window_start date, count int
 ```
+
+### 3.4 Additions to the Better Auth `user` table
+
+Better Auth generates this table; two columns are added to it rather than kept
+in a parallel table, because both are read on every authenticated request and a
+join would be pure overhead:
+
+- `blocked_at timestamptz null` — set by the operator action in §9.4.
+- `is_anonymous boolean` — supplied by the anonymous plugin; relied on by the
+  24-hour reaper and by quota selection.
+
+### 3.5 Persistence notes
 
 **`message` must be stored verbatim, including `providerMeta`.** Gemini 3.x
 attaches an opaque `thoughtSignature` to `functionCall` parts, and replaying a
@@ -270,6 +283,7 @@ framing, the tier system and the injection defences are untouched.
 | `/evals` | Eval report | warm editorial |
 | `/settings` | Delete everything, sign out, link account | warm editorial |
 | `/privacy`, `/terms` | Legal | warm editorial |
+| `/admin` | Operator dashboard (§9) | terminal — matches the trace viewer |
 
 Visual design is Phase 2 and is specified separately. The trace viewer keeps its
 monospace terminal aesthetic deliberately: it is the right genre for that
@@ -291,11 +305,91 @@ content.
   upload, enforced by a nightly reaper, and cleared by signing in.
 - **Deletion.** `/settings` offers one-click deletion of the entire ledger and
   of the account, cascading through `owner_id`.
-- **Privacy page** states what is stored, for how long, and that the site is a
-  demonstration rather than a financial service.
+- **Privacy page** states what is stored, for how long, that the site is a
+  demonstration rather than a financial service, and that the operator can view
+  diagnostic traces which include ledger contents (§9.5).
 - `data/private/` stays gitignored; no real statement data ever enters git.
 
-## 9. Environments and deployment
+## 9. Admin dashboard
+
+The owner needs one place to see what the deployed app is actually doing —
+above all what it is costing, because the $20 ceiling in §5 is the binding
+constraint and a surprise there is a surprise on a personal card.
+
+### 9.1 Authorization
+
+Access is by session email against an `ADMIN_EMAILS` allowlist (comma-separated
+env var). No roles table: there is exactly one operator, and a table would be
+ceremony around a constant.
+
+Unauthorized requests get **404, not 403**. A 403 confirms the route exists,
+which is free reconnaissance for anyone probing a public site.
+
+### 9.2 The RLS bypass has exactly one door
+
+This is the security-critical part. The admin dashboard must read across every
+owner, which is precisely what §4.2 exists to prevent. Two rules:
+
+1. All admin reads go through `packages/ledger/src/repo/admin.ts` and nowhere
+   else. That module is the only place in the application permitted to use the
+   RLS-bypassing role, and every function in it takes an already-verified admin
+   session rather than re-checking authorization itself.
+2. Every function in that module is read-only except the two operator actions in
+   §9.4, which are individually named and audited.
+
+A reviewer should be able to answer "how could one user see another's data?" by
+reading one file.
+
+### 9.3 What it shows
+
+Seven panels at `/admin`, each drilling into the existing trace viewer.
+
+1. **Budget** — spend today against the daily cap, month-to-date against the
+   monthly ceiling, projected month-end at the current burn rate, a 30-day
+   sparkline, and whether the kill-switch is armed or tripped. First and largest,
+   because it is the number that can hurt.
+2. **Traffic** — visitors today / 7d / 30d, anonymous versus signed-in, the
+   anonymous-to-account conversion rate, new versus returning.
+3. **Health** — run status split (`ok` / `error` / `blocked` / `aborted`), p50 and
+   p95 latency, iteration-limit hits, and tool error rate.
+4. **Safety** — writes proposed, allowed and declined; uploads processed;
+   `blocked` runs with their provider reason. These are the guardrails' field
+   results as opposed to their eval results.
+5. **Tools** — per tool: call count, error rate, median latency. Sortable. This is
+   how you learn which tool descriptions are failing to earn selection.
+6. **Recent runs** — the existing `/runs` table widened with an owner column and
+   unscoped, linking to `/runs/[id]`.
+7. **Users** — created, kind, messages used today, cost attributed to date, last
+   seen, blocked state. Cost per user is how abuse becomes visible.
+
+All of it is derived from `trace_runs`, `trace_events` and the Better Auth `user`
+table, which already record everything listed. No new instrumentation is
+required, and deliberately **no rollup tables**: at ~148 turns/day a direct scan
+stays fast for years, and a rollup is a cache to invalidate for no present gain.
+
+### 9.4 Operator actions
+
+Two writes, because a read-only dashboard cannot stop an incident:
+
+- **Pause live chat** — a manual kill-switch independent of the budget trip, so
+  the site can be put into replay-only mode instantly.
+- **Block an owner** — `user.blocked_at`; blocked owners get the same graceful
+  fallback as a quota trip rather than an error.
+
+Both are logged to `trace_events` with `type = 'error'` and an explicit
+`kind: 'operator_action'` payload, so operator interventions appear in the same
+timeline as everything else rather than in a separate place nobody reads.
+
+### 9.5 Privacy consequence
+
+Trace payloads contain tool arguments and results, which for this app means
+transaction descriptions and amounts. An operator viewing a trace is therefore
+viewing that visitor's ledger contents. That is the honest meaning of "see
+everything that happened", and the privacy page must say so plainly rather than
+leaving it implied. It is a small exposure here because ledgers are synthetic by
+default, but it is not zero once a visitor uploads a real statement.
+
+## 10. Environments and deployment
 
 - **Vercel** for the app, **Neon** for Postgres.
 - **The production database must be unreachable from `pnpm eval`**, which
@@ -309,9 +403,9 @@ content.
   `GOOGLE_CLIENT_SECRET`, `TURNSTILE_SECRET_KEY`,
   `NEXT_PUBLIC_TURNSTILE_SITE_KEY`, `GLOBAL_DAILY_BUDGET_USD`,
   `ANON_DAILY_MESSAGE_QUOTA`, `USER_DAILY_MESSAGE_QUOTA`, `RATE_LIMIT_SALT`,
-  `ALLOW_DESTRUCTIVE_RESET`.
+  `ALLOW_DESTRUCTIVE_RESET`, `ADMIN_EMAILS`.
 
-## 10. Testing
+## 11. Testing
 
 | Area | Test |
 | --- | --- |
@@ -323,17 +417,20 @@ content.
 | Suspended cost accounting | A confirmed write's `trace_runs` row includes tokens spent before the suspension |
 | Quotas | Owner, IP and global caps each return the right `reason` and degrade to the demo |
 | Anonymous expiry | Reaper deletes >24h anonymous ledgers and nothing else |
+| Admin authorization | A non-admin session gets 404 on `/admin`; an admin gets 200 |
+| Admin bypass containment | The RLS-bypassing role is referenced in `repo/admin.ts` and nowhere else (a grep-level test) |
+| Operator actions | Pause and block each degrade to the replay fallback, and each writes an `operator_action` event |
 | Existing suites | Double-entry invariant and `pnpm injection:report` stay green in CI |
 
 TDD throughout Phase 3, per the launch prompt.
 
-## 11. Out of scope
+## 12. Out of scope
 
 Bring-your-own-key. Paid tiers. Live bank connections. Real FX. Mobile app.
 Voice mode. Multi-provider adapters. Team or shared ledgers. Anything that turns
 this into a financial service rather than a demonstration of one.
 
-## 12. To verify during planning
+## 13. To verify during planning
 
 1. Better Auth anonymous plugin: exact `onLinkAccount` signature and whether the
    hook runs inside a transaction we can join.
