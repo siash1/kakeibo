@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
-import type { Channel, RunFinish, TraceEventInput, TraceRunHandle, Tracer } from '@kakeibo/core'
+import type { Channel } from '@kakeibo/core/registry'
+import type { RunFinish, TraceEventInput, TraceRunHandle, Tracer } from '@kakeibo/core/trace'
 import { desc, eq } from 'drizzle-orm'
 import { getDb } from '../db'
 import { traceEvents, traceRuns } from '../schema'

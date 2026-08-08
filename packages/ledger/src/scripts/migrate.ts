@@ -1,4 +1,4 @@
-import { loadEnv } from '@kakeibo/core'
+import { loadEnv } from '@kakeibo/core/env'
 import { migrate } from 'drizzle-orm/node-postgres/migrator'
 import { closeDb, getDb } from '../db'
 

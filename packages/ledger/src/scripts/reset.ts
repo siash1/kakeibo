@@ -1,4 +1,4 @@
-import { loadEnv } from '@kakeibo/core'
+import { loadEnv } from '@kakeibo/core/env'
 import { sql } from 'drizzle-orm'
 import { closeDb, getDb } from '../db'
 

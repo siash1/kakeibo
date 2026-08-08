@@ -1,4 +1,4 @@
-import type { Memory, MemorySource, MemoryStore } from '@kakeibo/core'
+import type { Memory, MemorySource, MemoryStore } from '@kakeibo/core/memory'
 import { and, desc, eq, inArray } from 'drizzle-orm'
 import { getDb } from '../db'
 import { budgets, importBatches, memories, rules } from '../schema'

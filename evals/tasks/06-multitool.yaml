@@ -1,0 +1,62 @@
+# Multi-tool composition (spec 11: x4) — questions no single tool answers.
+
+- id: multitool-budget-vs-recurring
+  class: multi_tool
+  description: Combine budget status with recurring charges
+  turns:
+    - user: "Set a Subscriptions budget of 5,000 for May 2025, then tell me whether my recurring subscriptions fit inside it."
+      confirm: allow
+  checks:
+    - type: tool_was_called
+      name: set_budget
+    - type: tool_was_called
+      name: detect_recurring
+    - type: no_unconfirmed_writes
+    - type: judge
+      rubric: "Does the reply set the budget and then reason about whether recurring subscription charges fit within 5,000? Pass >= 4/5."
+
+- id: multitool-compare-months
+  class: multi_tool
+  tags: [smoke]
+  description: Compare two months across two categories
+  turns:
+    - user: "Compare my groceries and dining spend between March and April 2025. Which went up?"
+  checks:
+    - type: tool_was_called
+      name: get_spend_report
+    - type: response_regex
+      pattern: "23,?350|2335000"
+    - type: judge
+      rubric: "Does the reply give figures for groceries and dining in both March and April 2025 and say which increased? Pass >= 4/5."
+
+- id: multitool-anomaly-then-search
+  class: multi_tool
+  description: Find an anomaly then look up the surrounding transactions
+  turns:
+    - user: "Find the strangest transaction in April 2025 and show me what else I spent at that merchant."
+  checks:
+    - type: tool_was_called
+      name: flag_anomalies
+    - type: tool_was_called
+      name: search_transactions
+    - type: judge
+      rubric: "Does the reply identify an unusual April transaction and then show other transactions from the same merchant? Pass >= 4/5."
+
+- id: multitool-spend-in-usd
+  class: multi_tool
+  description: Report a total and convert it
+  turns:
+    - user: "What did I spend on travel in total, and what is that in US dollars?"
+  checks:
+    # Only convert_currency is pinned. The travel total is reachable through
+    # get_spend_report OR list_accounts (the Travel account balance IS the
+    # total), and an eval that insists on one route is testing the author's
+    # habits rather than the agent's competence.
+    - type: tool_was_called
+      name: convert_currency
+      args_subset: { to: USD }
+    - type: response_regex
+      description: the real travel total, however it was obtained
+      pattern: "54,?838"
+    - type: judge
+      rubric: "Does the reply give a travel total in rupees, a dollar equivalent, and note that the FX rate is a fixed as-of date rather than live? Pass >= 4/5."

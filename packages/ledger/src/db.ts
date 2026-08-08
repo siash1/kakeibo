@@ -1,4 +1,4 @@
-import { env } from '@kakeibo/core'
+import { env } from '@kakeibo/core/env'
 import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres'
 import pg from 'pg'
 import * as schema from './schema'

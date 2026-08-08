@@ -19,7 +19,7 @@
     "db:reset": "pnpm --filter @kakeibo/ledger reset",
     "check:providers": "tsx scripts/check-providers.ts",
     "eval": "pnpm --filter @kakeibo/evals run:eval",
-    "eval:smoke": "pnpm --filter @kakeibo/evals run:eval -- --filter smoke",
+    "eval:smoke": "pnpm --filter @kakeibo/evals run:eval --filter smoke",
     "record": "RECORD=1 pnpm --filter @kakeibo/evals run:eval -- --filter smoke",
     "mcp": "pnpm --filter @kakeibo/mcp start",
     "build": "pnpm -r --filter=@kakeibo/mcp build",
@@ -29,7 +29,8 @@
     "lint:fix": "biome check --write .",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "cache:report": "tsx scripts/cache-report.ts",
-    "injection:report": "tsx scripts/injection-report.ts"
+    "injection:report": "tsx scripts/injection-report.ts",
+    "metrics": "tsx scripts/metrics.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.14",

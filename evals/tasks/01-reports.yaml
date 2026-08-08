@@ -1,0 +1,102 @@
+# Reports and sums against the SQL oracle (spec 11: x6).
+# Every figure here is checked twice: once by asserting the agent called the
+# right tool, and once by re-deriving the number in SQL. The agent is never
+# trusted to be the source of truth about its own answer.
+
+- id: report-groceries-march
+  class: reports
+  tags: [smoke]
+  description: Total grocery spend for a single month
+  turns:
+    - user: "What did I spend on groceries in March 2025?"
+  checks:
+    - type: tool_was_called
+      name: get_spend_report
+    - type: response_regex
+      pattern: "23,?350"
+    - type: sql_equals
+      description: Groceries March total in minor units
+      query: >
+        select coalesce(sum(p.amount_minor),0)::text from postings p
+        join transactions t on t.id=p.transaction_id
+        join accounts a on a.id=p.account_id
+        where a.name='Groceries' and t.date between '2025-03-01' and '2025-03-31'
+      expect: "2335000"
+    - type: judge
+      rubric: "Does the reply state the grocery total for March 2025 clearly, with a currency symbol, and without padding or unnecessary questions? Pass >= 4/5."
+
+- id: report-dining-april
+  class: reports
+  description: Total dining spend for a single month
+  turns:
+    - user: "How much did I spend on dining in April 2025?"
+  checks:
+    - type: tool_was_called
+      name: get_spend_report
+    - type: sql_equals
+      query: >
+        select coalesce(sum(p.amount_minor),0)::text from postings p
+        join transactions t on t.id=p.transaction_id
+        join accounts a on a.id=p.account_id
+        where a.name='Dining' and t.date between '2025-04-01' and '2025-04-30'
+      expect: "1441400"
+    - type: response_regex
+      pattern: "14,?414"
+
+- id: report-by-month
+  class: reports
+  description: Spending grouped by month across the whole ledger
+  turns:
+    - user: "Show me my total spending broken down by month."
+  checks:
+    - type: tool_was_called
+      name: get_spend_report
+      args_subset: { group_by: month }
+    - type: response_regex
+      pattern: "2025-0?1|january"
+    - type: response_regex
+      pattern: "2025-0?6|june"
+    - type: judge
+      rubric: "Does the reply present a per-month breakdown covering the six months in the ledger, with amounts? Pass >= 4/5."
+
+- id: report-top-category
+  class: reports
+  description: Identify the largest spending category in a month
+  turns:
+    - user: "What was my biggest spending category in May 2025?"
+  checks:
+    - type: tool_was_called
+      name: get_spend_report
+    - type: response_contains
+      text: "Rent"
+
+- id: report-total-may
+  class: reports
+  description: Total spend across all categories for a month
+  turns:
+    - user: "What did I spend in total in May 2025?"
+  checks:
+    - type: tool_was_called
+      name: get_spend_report
+    - type: sql_equals
+      query: >
+        select coalesce(sum(p.amount_minor),0)::text from postings p
+        join transactions t on t.id=p.transaction_id
+        join accounts a on a.id=p.account_id
+        where a.type='expense' and t.date between '2025-05-01' and '2025-05-31'
+      expect: "16209900"
+    - type: judge
+      rubric: "Does the reply give a single clear total for May 2025 spending? Pass >= 4/5."
+
+- id: report-accounts-overview
+  class: reports
+  description: Chart of accounts with balances
+  turns:
+    - user: "What accounts do I have and what are their balances?"
+  checks:
+    - type: tool_was_called
+      name: list_accounts
+    - type: response_contains
+      text: "Checking"
+    - type: judge
+      rubric: "Does the reply summarise the accounts and their balances in a readable way rather than dumping raw JSON? Pass >= 4/5."

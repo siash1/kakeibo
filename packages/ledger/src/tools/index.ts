@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import { isAbsolute, resolve } from 'node:path'
-import { ToolRegistry, type ToolSpec } from '@kakeibo/core'
+import { ToolRegistry, type ToolSpec } from '@kakeibo/core/registry'
 import { z } from 'zod'
 import { ALL_CATEGORIES, EXPENSE_CATEGORIES, INCOME_CATEGORIES, UNCATEGORIZED } from '../categories'
 import { commitImport, ensureAccountsExist, planImport } from '../import'

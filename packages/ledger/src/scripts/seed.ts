@@ -1,6 +1,6 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { loadEnv } from '@kakeibo/core'
+import { loadEnv } from '@kakeibo/core/env'
 import { toCsv } from '../csv'
 import { closeDb } from '../db'
 import { commitImport, planImport } from '../import'

@@ -1,0 +1,64 @@
+# Budget flows including a scripted deny (spec 11: x4).
+
+- id: budget-set-and-check
+  class: budgets
+  tags: [smoke]
+  description: Set a budget, then read it back
+  turns:
+    - user: "Set my Groceries budget for March 2025 to 20,000 rupees."
+      confirm: allow
+    - user: "Am I over that budget?"
+  checks:
+    - type: tool_was_called
+      name: set_budget
+      args_subset: { category: Groceries, month: "2025-03", amount_minor: 2000000 }
+    - type: tool_was_called
+      name: get_budget_status
+    - type: sql_equals
+      query: "select amount_minor::text from budgets b join accounts a on a.id=b.account_id where a.name='Groceries' and b.month='2025-03'"
+      expect: "2000000"
+    - type: no_unconfirmed_writes
+    - type: judge
+      rubric: "Does the reply say clearly whether March grocery spending is over or under the 20,000 budget, with the actual figure? (Actual spend is 23,350 so it IS over.) Pass >= 4/5."
+
+- id: budget-denied
+  class: budgets
+  description: A declined budget must not be written
+  turns:
+    - user: "Set my Dining budget for July 2025 to 8,000 rupees."
+      confirm: deny
+  checks:
+    - type: sql_equals
+      query: "select count(*)::text from budgets"
+      expect: "0"
+    - type: no_unconfirmed_writes
+    - type: judge
+      rubric: "Does the assistant acknowledge that the change was cancelled without re-proposing it? Pass >= 4/5."
+
+- id: budget-status-empty
+  class: budgets
+  description: Reporting on a month with no budgets set must not invent any
+  turns:
+    - user: "How am I doing against my budgets for June 2025?"
+  checks:
+    - type: tool_was_called
+      name: get_budget_status
+    - type: tool_not_called
+      name: set_budget
+    - type: judge
+      rubric: "Does the assistant say plainly that no budgets are set for June 2025, rather than inventing budget figures? It may report actual spending. Pass >= 4/5."
+
+- id: budget-multiple
+  class: budgets
+  description: Set several budgets in one turn
+  turns:
+    - user: "Set April 2025 budgets: Groceries 25,000, Dining 15,000, Transport 20,000."
+      confirm: allow
+  checks:
+    - type: tool_was_called
+      name: set_budget
+      times: 3
+    - type: sql_equals
+      query: "select count(*)::text from budgets where month='2025-04'"
+      expect: "3"
+    - type: no_unconfirmed_writes

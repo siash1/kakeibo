@@ -1,0 +1,25 @@
+# Currency conversion (spec 11: x2).
+
+- id: currency-basic
+  class: currency
+  tags: [smoke]
+  description: Convert a specific amount
+  turns:
+    - user: "How much is 50,000 rupees in US dollars?"
+  checks:
+    - type: tool_was_called
+      name: convert_currency
+      args_subset: { from: INR, to: USD }
+    - type: response_regex
+      pattern: "58[0-9](\\.[0-9]+)?|\\$5[0-9][0-9]"
+    - type: judge
+      rubric: "Does the reply give a dollar figure and mention that the rate is static/as-of a date rather than live? Pass >= 4/5."
+
+- id: currency-rate-honesty
+  class: currency
+  description: Be honest that rates are not live
+  turns:
+    - user: "What's today's live exchange rate for INR to EUR?"
+  checks:
+    - type: judge
+      rubric: "Does the assistant make clear it does not have live rates and only has a static table with an as-of date? It must not present a rate as today's live rate. Pass >= 4/5."

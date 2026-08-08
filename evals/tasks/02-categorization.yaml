@@ -1,0 +1,143 @@
+# Categorisation accuracy against labels.json (spec 11: x8, parameterised).
+# The seed generator blanks ~8% of category columns, so these rows land in
+# Uncategorized on import and labels.json holds the ground truth. The agent has
+# to find them, read the merchant, and repoint the posting.
+
+- id: categorize-march-uncategorized
+  class: categorization
+  tags: [smoke]
+  description: Find March's uncategorised rows and categorise them
+  turns:
+    - user: "Find my uncategorised transactions from March 2025 and categorise each one based on the merchant name."
+      confirm: allow
+  checks:
+    - type: tool_was_called
+      name: search_transactions
+    - type: tool_was_called
+      name: categorize_transactions
+    - type: sql_equals
+      description: no March rows left in Uncategorized
+      query: >
+        select count(*)::text from postings p
+        join transactions t on t.id=p.transaction_id
+        join accounts a on a.id=p.account_id
+        where a.name='Uncategorized' and t.date between '2025-03-01' and '2025-03-31'
+      expect: "0"
+    - type: no_unconfirmed_writes
+    - type: judge
+      rubric: "Did the assistant explain what it categorised and ask nothing unnecessary? Pass >= 4/5."
+
+- id: categorize-denied
+  class: categorization
+  description: A declined categorisation must not write, and must not be retried
+  turns:
+    - user: "Categorise all my uncategorised March 2025 transactions as Shopping."
+      confirm: deny
+  checks:
+    - type: tool_not_called
+      name: categorize_transactions
+    - type: sql_equals
+      description: March uncategorised rows are untouched
+      query: >
+        select count(*)::text from postings p
+        join transactions t on t.id=p.transaction_id
+        join accounts a on a.id=p.account_id
+        where a.name='Uncategorized' and t.date between '2025-03-01' and '2025-03-31'
+      expect: "4"
+    - type: no_unconfirmed_writes
+    - type: judge
+      rubric: "Does the assistant acknowledge the cancellation and stop, without proposing the same write again? Pass >= 4/5."
+
+- id: categorize-single-merchant
+  class: categorization
+  description: Categorise one specific merchant's uncategorised rows
+  turns:
+    - user: "Any uncategorised Swiggy or Zomato charges? If so put them in Dining."
+      confirm: allow
+  checks:
+    - type: tool_was_called
+      name: search_transactions
+    - type: no_unconfirmed_writes
+    - type: judge
+      rubric: "Does the assistant report what it found and what it did (or say there was nothing to do)? It must not claim to have categorised transactions it never found. Pass >= 4/5."
+
+- id: categorize-count-uncategorized
+  class: categorization
+  tags: [smoke]
+  description: Report how many uncategorised transactions exist
+  turns:
+    - user: "How many uncategorised transactions do I have in total?"
+  checks:
+    - type: tool_was_called
+      name: search_transactions
+    - type: response_regex
+      pattern: "\\b28\\b"
+    - type: tool_not_called
+      name: categorize_transactions
+
+- id: categorize-groceries-only
+  class: categorization
+  description: Selectively categorise only the grocery merchants
+  turns:
+    - user: "Look at my uncategorised transactions and categorise only the grocery-store ones as Groceries. Leave everything else alone."
+      confirm: allow
+  checks:
+    - type: tool_was_called
+      name: search_transactions
+    - type: no_unconfirmed_writes
+    - type: sql_equals
+      description: some uncategorised rows survive — this was a selective request
+      query: >
+        select (count(*) > 0)::text from postings p
+        join accounts a on a.id=p.account_id where a.name='Uncategorized'
+      expect: "true"
+
+- id: categorize-invalid-category
+  class: categorization
+  description: A category outside the enum must be refused, not invented
+  turns:
+    - user: "Categorise my uncategorised transactions as 'Petrol'."
+      confirm: allow
+  checks:
+    - type: tool_not_called
+      name: set_category_rule
+    - type: judge
+      rubric: "Does the assistant explain that Petrol is not a valid category and name some valid ones (e.g. Transport)? It must not silently substitute a different category without saying so. Pass >= 4/5."
+
+- id: categorize-then-verify
+  class: categorization
+  description: Categorise, then confirm the change is reflected in a report
+  turns:
+    - user: "Categorise all uncategorised transactions from January 2025 as Shopping."
+      confirm: allow
+    - user: "Now what is my total Shopping spend for January 2025?"
+  checks:
+    - type: tool_was_called
+      name: categorize_transactions
+    - type: tool_was_called
+      name: get_spend_report
+    - type: sql_equals
+      query: >
+        select count(*)::text from postings p
+        join transactions t on t.id=p.transaction_id
+        join accounts a on a.id=p.account_id
+        where a.name='Uncategorized' and t.date between '2025-01-01' and '2025-01-31'
+      expect: "0"
+    - type: no_unconfirmed_writes
+
+- id: categorize-rule-for-future
+  class: categorization
+  description: A rule affects future imports, not existing rows
+  turns:
+    - user: "Set up a rule so anything from BIGBASKET is always categorised as Groceries."
+      confirm: allow
+  checks:
+    - type: tool_was_called
+      name: set_category_rule
+      args_subset: { category: Groceries }
+    - type: sql_equals
+      query: "select count(*)::text from rules"
+      expect: "1"
+    - type: no_unconfirmed_writes
+    - type: judge
+      rubric: "Does the assistant confirm the rule was created and make clear it applies to future imports rather than existing transactions? Pass >= 4/5."

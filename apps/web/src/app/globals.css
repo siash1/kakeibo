@@ -1,0 +1,52 @@
+@import 'tailwindcss';
+
+/*
+ * Dark by default (spec 13). One accent, one surface ramp, monospace numerals
+ * everywhere a figure appears — a ledger where the columns do not line up reads
+ * as untrustworthy no matter how correct it is.
+ */
+@theme {
+  --color-ink-950: oklch(0.16 0.008 265);
+  --color-ink-900: oklch(0.19 0.009 265);
+  --color-ink-850: oklch(0.22 0.010 265);
+  --color-ink-800: oklch(0.26 0.011 265);
+  --color-ink-700: oklch(0.34 0.012 265);
+  --color-ink-500: oklch(0.55 0.014 265);
+  --color-ink-300: oklch(0.74 0.012 265);
+  --color-ink-100: oklch(0.93 0.006 265);
+
+  --color-accent: oklch(0.72 0.14 195);
+  --color-accent-dim: oklch(0.52 0.10 195);
+  --color-warn: oklch(0.78 0.15 78);
+  --color-danger: oklch(0.66 0.18 25);
+  --color-ok: oklch(0.74 0.15 155);
+
+  --font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, monospace;
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  background: var(--color-ink-950);
+  color: var(--color-ink-100);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Tabular figures so amounts in a column align. */
+.num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--color-ink-800); border-radius: 5px; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-ink-700); }
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 1; }
+}
+.pulse-dot { animation: pulse-dot 1.2s ease-in-out infinite; }

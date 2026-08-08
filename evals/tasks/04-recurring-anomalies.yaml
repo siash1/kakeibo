@@ -1,0 +1,57 @@
+# Recurring detection (x2) and anomaly detection (x2) against the seed oracle.
+
+- id: recurring-subscriptions
+  class: recurring
+  tags: [smoke]
+  description: Find the planted monthly subscriptions
+  turns:
+    - user: "What subscriptions am I paying for every month?"
+  checks:
+    - type: tool_was_called
+      name: detect_recurring
+    - type: response_regex
+      pattern: "netflix"
+    - type: response_regex
+      pattern: "spotify"
+    - type: judge
+      rubric: "Does the reply list recurring subscriptions with amounts and a monthly cadence? Netflix, Spotify, a gym and cloud storage are all present in the data. Pass >= 4/5."
+
+- id: recurring-monthly-total
+  class: recurring
+  description: Total monthly commitment from recurring charges
+  turns:
+    - user: "How much am I committed to every month in recurring charges?"
+  checks:
+    - type: tool_was_called
+      name: detect_recurring
+    - type: judge
+      rubric: "Does the reply give a total monthly recurring commitment figure and mention the largest contributors (rent is the biggest at 32,000)? Pass >= 4/5."
+
+- id: anomaly-april-outlier
+  class: anomalies
+  tags: [smoke]
+  description: Find the planted 10x grocery outlier
+  turns:
+    - user: "Was there anything unusual about my spending in April 2025?"
+  checks:
+    - type: tool_was_called
+      name: flag_anomalies
+      args_subset: { month: "2025-04" }
+    - type: response_regex
+      pattern: "dmart|24,?500|bulk"
+    - type: judge
+      rubric: "Does the reply call out the unusually large grocery transaction in April with its amount? Pass >= 4/5."
+
+- id: anomaly-may-duplicate
+  class: anomalies
+  description: Find the planted duplicate charge and the refund
+  turns:
+    - user: "Did I get double charged for anything in May 2025?"
+  checks:
+    - type: tool_was_called
+      name: flag_anomalies
+      args_subset: { month: "2025-05" }
+    - type: response_regex
+      pattern: "croma|duplicate|twice|8,?999"
+    - type: judge
+      rubric: "Does the reply identify the duplicate CROMA charge on 2025-05-14? Pass >= 4/5."

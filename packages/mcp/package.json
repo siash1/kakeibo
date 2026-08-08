@@ -13,6 +13,7 @@
     "@kakeibo/ledger": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.22.0",
     "dotenv": "^17.2.4",
+    "pg": "^8.16.3",
     "zod": "^4.1.13"
   },
   "devDependencies": {

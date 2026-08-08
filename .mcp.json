@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "kakeibo": {
+      "command": "node",
+      "args": ["packages/mcp/dist/index.js"],
+      "env": {
+        "DATABASE_URL": "postgres://kakeibo:kakeibo@localhost:5433/kakeibo",
+        "ALLOW_WRITES": "0"
+      }
+    }
+  }
+}
