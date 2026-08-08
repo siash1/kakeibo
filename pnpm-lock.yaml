@@ -14,6 +14,9 @@ importers:
       '@kakeibo/core':
         specifier: workspace:*
         version: link:packages/core
+      '@kakeibo/evals':
+        specifier: workspace:*
+        version: link:packages/evals
       '@kakeibo/ledger':
         specifier: workspace:*
         version: link:packages/ledger

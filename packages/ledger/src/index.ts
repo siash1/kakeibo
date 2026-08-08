@@ -9,6 +9,7 @@ export {
 } from './categories'
 export { type MappingPreset, normalizeDate, parseCsv, parseStatement, toCsv } from './csv'
 export { closeDb, type Db, getDb, getPool, schema } from './db'
+export { deterministicUuid, SEED_NAMESPACE } from './ids'
 export { commitImport, ensureAccountsExist, planImport } from './import'
 export {
   CURRENCY_SYMBOLS,

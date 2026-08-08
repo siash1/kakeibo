@@ -57,7 +57,9 @@ async function main(): Promise<void> {
     return
   }
 
-  const result = await commitImport('data/seed/transactions.csv', resolved, preview)
+  const result = await commitImport('data/seed/transactions.csv', resolved, preview, {
+    deterministicIds: true,
+  })
   console.log(`Imported ${result.imported} transactions (batch ${result.importBatchId})`)
   console.log(`  in:  ${formatMinor(result.totalInMinor)}`)
   console.log(`  out: ${formatMinor(result.totalOutMinor)}`)

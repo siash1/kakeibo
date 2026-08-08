@@ -22,6 +22,8 @@ export interface PostingInput {
 }
 
 export interface CreateTransactionInput {
+  /** Explicit primary key. Only the seed generator sets this (see ids.ts). */
+  id?: string
   date: string
   description: string
   rawDescription?: string
@@ -46,6 +48,7 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
     const [row] = await tx
       .insert(transactions)
       .values({
+        ...(input.id ? { id: input.id } : {}),
         date: input.date,
         description: input.description,
         rawDescription: input.rawDescription ?? input.description,
@@ -76,6 +79,7 @@ export async function createTransactions(inputs: CreateTransactionInput[]): Prom
       .insert(transactions)
       .values(
         inputs.map((input) => ({
+          ...(input.id ? { id: input.id } : {}),
           date: input.date,
           description: input.description,
           rawDescription: input.rawDescription ?? input.description,
@@ -162,7 +166,11 @@ export async function searchTransactions(
     .select()
     .from(transactions)
     .where(conditions.length > 0 ? and(...conditions) : undefined)
-    .orderBy(desc(transactions.date), desc(transactions.createdAt))
+    // The id tiebreaker is load-bearing: a bulk import gives every row the same
+    // created_at, so without it Postgres may return same-date rows in any order.
+    // That makes tool output non-reproducible, which breaks replay fixtures and
+    // eval oracles alike.
+    .orderBy(desc(transactions.date), desc(transactions.createdAt), asc(transactions.id))
     .limit(filters.limit ?? 20)
 
   return hydratePostings(rows)

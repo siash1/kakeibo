@@ -1,0 +1,57 @@
+name: ci
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    # Tests replay recorded fixtures (spec 8.2), so this job needs no Gemini
+    # credentials and costs nothing. It does need Postgres: the ledger tests
+    # assert the double-entry invariant against a real database rather than a
+    # mock, which is the only place that invariant can actually be checked.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: kakeibo
+          POSTGRES_PASSWORD: kakeibo
+          POSTGRES_DB: kakeibo
+        ports: ['5433:5432']
+        options: >-
+          --health-cmd "pg_isready -U kakeibo -d kakeibo"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+
+    env:
+      DATABASE_URL: postgres://kakeibo:kakeibo@localhost:5433/kakeibo
+      REPLAY: '1'
+      GEMINI_AUTH: vertex
+      GCP_PROJECT_ID: replay-only
+      AGENT_MODEL: gemini-3.6-flash
+      SUMMARIZER_MODEL: gemini-3.5-flash-lite
+      JUDGE_MODEL: gemini-3.1-pro-preview
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm db:migrate
+      - run: pnpm db:seed
+      - run: pnpm test
+
+  evals:
+    # Live evals hit the paid API, so they never run on push (spec 11).
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Run evals locally with pnpm eval; see README."

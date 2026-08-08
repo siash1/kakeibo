@@ -27,11 +27,14 @@
     "test:watch": "vitest",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
-    "typecheck": "tsc -b --pretty"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "cache:report": "tsx scripts/cache-report.ts",
+    "injection:report": "tsx scripts/injection-report.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.14",
     "@kakeibo/core": "workspace:*",
+    "@kakeibo/evals": "workspace:*",
     "@kakeibo/ledger": "workspace:*",
     "@types/node": "^22.13.5",
     "dotenv": "^17.4.2",

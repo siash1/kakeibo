@@ -1,5 +1,6 @@
 import { normalizeCategory, UNCATEGORIZED } from './categories'
 import { type MappingPreset, type ParsedRow, parseStatement } from './csv'
+import { deterministicUuid, SEED_NAMESPACE } from './ids'
 import { formatMinor } from './money'
 import { accountByName, requireAccount } from './repo/accounts'
 import { type CreateTransactionInput, createTransactions } from './repo/transactions'
@@ -87,6 +88,7 @@ export async function commitImport(
   filename: string,
   resolved: ResolvedRow[],
   preview: ImportPreview,
+  options: { deterministicIds?: boolean } = {},
 ): Promise<ImportResult> {
   const checking = await requireAccount('Checking')
   const batchId = await createImportBatch(filename, resolved.length)
@@ -97,6 +99,13 @@ export async function commitImport(
   }
 
   const inputs: CreateTransactionInput[] = resolved.map((row) => ({
+    // The synthetic corpus gets reproducible keys so fixtures and eval oracles
+    // survive a reseed; real imports keep database-generated ones.
+    ...(options.deterministicIds
+      ? {
+          id: deterministicUuid(SEED_NAMESPACE, `${row.lineNumber}|${row.date}|${row.description}`),
+        }
+      : {}),
     date: row.date,
     description: row.description,
     rawDescription: row.description,

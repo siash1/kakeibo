@@ -413,9 +413,24 @@ function createClient(): GeminiClient {
       'missing_project',
     )
   }
-  return new GoogleGenAI({
-    vertexai: true,
-    project: GCP_PROJECT_ID,
-    location: GCP_REGION,
-  }) as unknown as GeminiClient
+  // The SDK warns on every construction when it sees an API key in the
+  // environment alongside an explicit Vertex project. Both are legitimately set
+  // here — the key is the documented fallback path (spec 5.1) — so the warning
+  // is noise. Hide the key for the length of the constructor call only.
+  const savedKey = process.env.GEMINI_API_KEY
+  const savedGoogleKey = process.env.GOOGLE_API_KEY
+  delete process.env.GEMINI_API_KEY
+  delete process.env.GOOGLE_API_KEY
+  try {
+    return new GoogleGenAI({
+      vertexai: true,
+      project: GCP_PROJECT_ID,
+      location: GCP_REGION,
+    }) as unknown as GeminiClient
+  } finally {
+    if (savedKey === undefined) delete process.env.GEMINI_API_KEY
+    else process.env.GEMINI_API_KEY = savedKey
+    if (savedGoogleKey === undefined) delete process.env.GOOGLE_API_KEY
+    else process.env.GOOGLE_API_KEY = savedGoogleKey
+  }
 }
