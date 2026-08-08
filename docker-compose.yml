@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: kakeibo-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: kakeibo
+      POSTGRES_PASSWORD: kakeibo
+      POSTGRES_DB: kakeibo
+    ports:
+      - "5433:5432"
+    volumes:
+      - kakeibo-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kakeibo -d kakeibo"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  kakeibo-pgdata:

@@ -1,0 +1,42 @@
+{
+  "name": "kakeibo",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@10.32.1",
+  "scripts": {
+    "dev": "pnpm --filter @kakeibo/web dev",
+    "cli": "pnpm --filter @kakeibo/cli start",
+    "db:up": "bash scripts/db-up.sh",
+    "db:down": "bash scripts/db-down.sh",
+    "db:generate": "pnpm --filter @kakeibo/ledger generate",
+    "db:migrate": "pnpm --filter @kakeibo/ledger migrate",
+    "db:seed": "pnpm --filter @kakeibo/ledger seed",
+    "db:reset": "pnpm --filter @kakeibo/ledger reset",
+    "check:providers": "tsx scripts/check-providers.ts",
+    "eval": "pnpm --filter @kakeibo/evals run:eval",
+    "eval:smoke": "pnpm --filter @kakeibo/evals run:eval -- --filter smoke",
+    "record": "RECORD=1 pnpm --filter @kakeibo/evals run:eval -- --filter smoke",
+    "mcp": "pnpm --filter @kakeibo/mcp start",
+    "build": "pnpm -r --filter=@kakeibo/mcp build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "typecheck": "tsc -b --pretty"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.3.14",
+    "@kakeibo/core": "workspace:*",
+    "@kakeibo/ledger": "workspace:*",
+    "@types/node": "^22.13.5",
+    "dotenv": "^17.4.2",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  }
+}

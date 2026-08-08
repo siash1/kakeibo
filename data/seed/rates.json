@@ -1,0 +1,12 @@
+{
+  "base": "INR",
+  "asOf": "2025-06-30",
+  "note": "Static rates. kakeibo does not call an FX API by design (spec 3).",
+  "rates": {
+    "INR": 1,
+    "USD": 0.011655,
+    "EUR": 0.010742,
+    "GBP": 0.009186,
+    "JPY": 1.68
+  }
+}

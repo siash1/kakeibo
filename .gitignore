@@ -1,0 +1,22 @@
+node_modules/
+dist/
+.next/
+out/
+*.tsbuildinfo
+
+.env
+.env.local
+.env.*.local
+
+# Real bank statements — never committed (spec 2.5)
+data/private/
+
+# Local Postgres cluster used when Docker is unavailable (scripts/db-up.sh)
+.pgdata/
+.pgdata.log
+
+# Eval output is regenerated; latest.{md,json} are committed deliberately
+evals/report/runs/
+
+.DS_Store
+coverage/

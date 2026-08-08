@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node"]
+  },
+  "include": [
+    "packages/core/src/**/*.ts",
+    "packages/ledger/src/**/*.ts",
+    "packages/mcp/src/**/*.ts",
+    "packages/evals/src/**/*.ts",
+    "apps/cli/src/**/*.ts",
+    "scripts/**/*.ts",
+    "tests/**/*.ts"
+  ],
+  "exclude": ["**/node_modules", "**/dist", "**/.next", "apps/web"]
+}

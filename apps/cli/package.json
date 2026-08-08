@@ -1,0 +1,17 @@
+{
+  "name": "@kakeibo/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "kakeibo": "./src/index.ts"
+  },
+  "scripts": {
+    "start": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "@kakeibo/core": "workspace:*",
+    "@kakeibo/ledger": "workspace:*",
+    "dotenv": "^17.2.4"
+  }
+}
