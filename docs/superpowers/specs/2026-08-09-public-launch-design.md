@@ -29,6 +29,7 @@ own statement exists, works, and is deliberately secondary.
 | Demo ledger provisioning | Lazy per-visitor clone on first ledger-needing request; anonymous expires in 24h |
 | Confirm-before-write gate | Loop becomes **suspendable** (see §6) |
 | Admin | Single-operator dashboard at `/admin`, allowlist by email (see §9) |
+| Visitor map | Coarse city-level location from request IP via Vercel edge headers; no browser prompt |
 
 ### Success criteria
 
@@ -129,7 +130,14 @@ join would be pure overhead:
 - `is_anonymous boolean` — supplied by the anonymous plugin; relied on by the
   24-hour reaper and by quota selection.
 
-### 3.5 Persistence notes
+### 3.5 Geolocation columns
+
+`trace_runs` gains `geo_country char(2) null`, `geo_region text null`,
+`geo_city text null`, `geo_lat double precision null`, `geo_lon double precision
+null`. All nullable: they are absent in local development and for any request
+whose IP cannot be resolved, and the map is required to handle that.
+
+### 3.6 Persistence notes
 
 **`message` must be stored verbatim, including `providerMeta`.** Gemini 3.x
 attaches an opaque `thoughtSignature` to `functionCall` parts, and replaying a
@@ -307,7 +315,9 @@ content.
   of the account, cascading through `owner_id`.
 - **Privacy page** states what is stored, for how long, that the site is a
   demonstration rather than a financial service, and that the operator can view
-  diagnostic traces which include ledger contents (§9.5).
+  diagnostic traces which include ledger contents (§9.6), and that an
+  approximate city-level location is derived from each request's IP address for
+  operational analytics (§9.5).
 - `data/private/` stays gitignored; no real statement data ever enters git.
 
 ## 9. Admin dashboard
@@ -362,6 +372,9 @@ Seven panels at `/admin`, each drilling into the existing trace viewer.
 7. **Users** — created, kind, messages used today, cost attributed to date, last
    seen, blocked state. Cost per user is how abuse becomes visible.
 
+8. **Map** — approximate visitor locations plotted on a world map, sized by
+   activity. Coarse by design (see §9.5).
+
 All of it is derived from `trace_runs`, `trace_events` and the Better Auth `user`
 table, which already record everything listed. No new instrumentation is
 required, and deliberately **no rollup tables**: at ~148 turns/day a direct scan
@@ -380,7 +393,32 @@ Both are logged to `trace_events` with `type = 'error'` and an explicit
 `kind: 'operator_action'` payload, so operator interventions appear in the same
 timeline as everything else rather than in a separate place nobody reads.
 
-### 9.5 Privacy consequence
+### 9.5 Visitor map and how location is derived
+
+Location comes from the **IP address of the request**, resolved server-side. It
+does **not** use the browser Geolocation API, so no permission prompt ever
+appears — that prompt exists for precise device location, which this
+deliberately is not.
+
+- **Source:** Vercel populates `x-vercel-ip-country`, `x-vercel-ip-country-region`,
+  `x-vercel-ip-city`, `x-vercel-ip-latitude` and `x-vercel-ip-longitude` on every
+  request at the edge. Using them means no third-party geolocation service, no
+  extra network hop, no API key and no cost. Locally the headers are absent and
+  location is simply null, which the map must render without complaint.
+- **Granularity:** city-level only, which is what those headers provide — a
+  neighbourhood, not an address. The spec's own framing is that it does not need
+  to be exact.
+- **Storage:** `geo_country`, `geo_region`, `geo_city`, `geo_lat`, `geo_lon` on
+  `trace_runs`. Storing it per run rather than per user means the map shows
+  *activity* rather than a roster of people, and it ages out with trace data
+  instead of accumulating a permanent location history.
+- **Raw IPs are still never stored.** §5's salted-hash rule is unchanged; the
+  headers are read, coarsened and discarded within the request.
+- **Rendering:** an inline SVG world map with plotted points. No tile provider,
+  no map library, no API key, no external requests — which keeps the admin page
+  dependency-free and consistent with its terminal genre.
+
+### 9.6 Privacy consequence
 
 Trace payloads contain tool arguments and results, which for this app means
 transaction descriptions and amounts. An operator viewing a trace is therefore
@@ -417,6 +455,7 @@ default, but it is not zero once a visitor uploads a real statement.
 | Suspended cost accounting | A confirmed write's `trace_runs` row includes tokens spent before the suspension |
 | Quotas | Owner, IP and global caps each return the right `reason` and degrade to the demo |
 | Anonymous expiry | Reaper deletes >24h anonymous ledgers and nothing else |
+| Visitor map | Runs with no geo headers store nulls and the map renders without error |
 | Admin authorization | A non-admin session gets 404 on `/admin`; an admin gets 200 |
 | Admin bypass containment | The RLS-bypassing role is referenced in `repo/admin.ts` and nowhere else (a grep-level test) |
 | Operator actions | Pause and block each degrade to the replay fallback, and each writes an `operator_action` event |
