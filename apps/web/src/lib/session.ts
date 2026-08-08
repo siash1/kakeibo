@@ -22,8 +22,38 @@ interface PendingConfirm {
   createdAt: number
 }
 
-const histories = new Map<string, CanonicalMessage[]>()
-const pending = new Map<string, PendingConfirm>()
+/**
+ * Stashed on globalThis, not in module scope.
+ *
+ * `/api/chat` and `/api/confirm` are separate route handlers, and Next bundles
+ * them separately — module-level state is NOT reliably shared between them, and
+ * dev HMR re-evaluates modules on top of that. With a plain module-level Map the
+ * confirmation posted to one route lands in a different Map from the one the
+ * chat route is awaiting, and the turn hangs until its timeout. Symptom: the
+ * confirm card renders, you click allow, and nothing happens for five minutes.
+ *
+ * globalThis is per-process, which is exactly the scope this state wants.
+ */
+interface SessionStore {
+  histories: Map<string, CanonicalMessage[]>
+  pending: Map<string, PendingConfirm>
+}
+
+const globalStore = globalThis as typeof globalThis & { __kakeibo?: SessionStore }
+
+function sessionStore(): SessionStore {
+  if (!globalStore.__kakeibo) {
+    globalStore.__kakeibo = {
+      histories: new Map<string, CanonicalMessage[]>(),
+      pending: new Map<string, PendingConfirm>(),
+    }
+  }
+  return globalStore.__kakeibo
+}
+
+const store: SessionStore = sessionStore()
+
+const { histories, pending } = store
 
 /** Abandoned confirmations must not pin a turn open forever. */
 const CONFIRM_TIMEOUT_MS = 5 * 60_000
