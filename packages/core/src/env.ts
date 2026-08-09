@@ -93,6 +93,13 @@ const EnvSchema = z.object({
   REPLAY: boolish.default(false),
   /** Explicit context caching can be disabled to measure the delta (spec 5.5). */
   EXPLICIT_CACHE: boolish.default(true),
+
+  /**
+   * Comma-separated emails allowed to reach /admin. Empty means nobody, which
+   * is the right default: an empty allowlist that granted access would make a
+   * missing environment variable an open dashboard.
+   */
+  ADMIN_EMAILS: z.string().default(''),
 })
 
 export type Env = z.infer<typeof EnvSchema>
