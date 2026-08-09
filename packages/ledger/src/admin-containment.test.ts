@@ -51,7 +51,7 @@ const ALLOWED_OUTSIDE = new Map<string, string>([
 ])
 
 /** Directories that are not this package's own source, however they got there. */
-const SKIP_DIRS = new Set(['node_modules', '.turbo', 'dist'])
+const SKIP_DIRS = new Set(['node_modules', '.turbo', 'dist', '.next', '.vercel'])
 
 function sourceFiles(dir: string, base: string, found: string[] = []): string[] {
   for (const entry of readdirSync(dir)) {

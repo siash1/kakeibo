@@ -30,9 +30,16 @@ import { adminDb } from '../db'
 /**
  * Proof that the caller is the operator.
  *
- * A branded type with a private symbol: it cannot be forged with an object
- * literal, so `readEverything({ email } as AdminSession)` does not compile.
- * That is the whole mechanism — the type is the capability.
+ * A branded type with a private symbol: nothing produces one by accident, the
+ * way `{ email }` passed where an `AdminSession` was expected would if the
+ * type were a bare `{ email: string }`. A deliberate `{ email } as
+ * AdminSession` still compiles — a single `as` cast is allowed in either
+ * direction between structurally related types, and importing the private
+ * symbol does not change that — so the brand stops a mistake at the call
+ * site, which is the only place it is cheap to catch, not someone willing to
+ * write the cast. That bar is the right one: anyone able to write `as
+ * AdminSession` in this codebase can already call `adminDb()` directly, so
+ * there is nothing further here for the brand to defend.
  */
 declare const verified: unique symbol
 export interface AdminSession {
