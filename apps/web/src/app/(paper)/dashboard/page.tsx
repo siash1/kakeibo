@@ -75,7 +75,7 @@ export default async function DashboardPage({
   if (!viewer) {
     return (
       <div className="mx-auto max-w-[52ch] py-24 text-center">
-        <h1 className="font-serif text-[34px] leading-[1.15] tracking-[-0.02em]">
+        <h1 className="font-serif text-[clamp(1.75rem,5vw,2.5rem)] leading-[1.1] tracking-[-0.025em]">
           Your ledger, at a glance.
         </h1>
         <p className="mt-4 text-[15px] leading-relaxed text-sumi-600">
@@ -84,7 +84,7 @@ export default async function DashboardPage({
         </p>
         <a
           href="/chat"
-          className="mt-8 inline-block border-b border-sumi-900 pb-0.5 font-serif text-[16px] no-underline"
+          className="mt-8 inline-block border-b border-sumi-900 pb-0.5 font-serif text-[14px] no-underline"
         >
           Ask about your ledger →
         </a>
