@@ -36,6 +36,12 @@ const EnvSchema = z.object({
   TRACE_THINKING: boolish.default(false),
 
   DATABASE_URL: z.string().default('postgres://kakeibo:kakeibo@localhost:5433/kakeibo'),
+  /**
+   * Application connection, as a role that does NOT own the tables so
+   * row-level security applies to it. Empty falls back to DATABASE_URL, which
+   * is what keeps local development working before the RLS migration lands.
+   */
+  APP_DATABASE_URL: z.string().default(''),
   CONTEXT_BUDGET_TOKENS: z.coerce.number().int().positive().default(60_000),
   ALLOW_WRITES: boolish.default(false),
   PORT: z.coerce.number().int().default(3000),
