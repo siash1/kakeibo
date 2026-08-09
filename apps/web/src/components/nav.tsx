@@ -10,8 +10,16 @@ const LINKS = [
   { href: '/evals', label: 'evals' },
 ]
 
-export function Nav() {
+/**
+ * `showAdmin` comes from the layout, a server component, because `Nav` is a
+ * client component and cannot read the session itself. The link this hides is
+ * not the security boundary — `/admin` 404s for anyone who is not the
+ * operator regardless — but a dead link in everyone's nav is an invitation to
+ * probe it.
+ */
+export function Nav({ showAdmin = false }: { showAdmin?: boolean }) {
   const pathname = usePathname()
+  const links = showAdmin ? [...LINKS, { href: '/admin', label: 'operator' }] : LINKS
   return (
     <header className="sticky top-0 z-20 border-b border-ink-800 bg-ink-950/85 backdrop-blur">
       <div className="mx-auto flex h-12 max-w-6xl items-center gap-6 px-5">
@@ -22,7 +30,7 @@ export function Nav() {
           <span className="text-[11px] text-ink-500">家計簿</span>
         </Link>
         <nav className="flex items-center gap-1">
-          {LINKS.map((link) => {
+          {links.map((link) => {
             const active = link.href === '/' ? pathname === '/' : pathname.startsWith(link.href)
             return (
               <Link
