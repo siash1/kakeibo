@@ -7,6 +7,14 @@ import { minorToDecimalString } from './money'
 import { asOwnerId, type OwnerId } from './owner'
 import { accountBalances, ensureSeedAccounts, listAccounts } from './repo/accounts'
 import {
+  createConversation,
+  latestConversation,
+  loadHistory,
+  replaceHistory,
+  saveSuspendedTurn,
+  takeSuspendedTurn,
+} from './repo/conversations'
+import {
   budgetStatus,
   detectRecurring,
   flagAnomalies,
@@ -64,9 +72,29 @@ async function seedLedger(owner: OwnerId): Promise<void> {
   await commitImport(owner, 'iso.csv', resolved, preview)
 }
 
+/** Alice's, so Bob can be asked for them by id and must still get nothing. */
+let aliceConversation = ''
+let aliceSuspendedTurn = ''
+
 beforeAll(async () => {
   await resetOwners(alice, bob)
   await seedLedger(alice)
+
+  const conversation = await createConversation(alice, 'Alice thinking aloud')
+  aliceConversation = conversation.id
+  await replaceHistory(alice, aliceConversation, [
+    { role: 'user', content: [{ type: 'text', text: 'what did I spend on groceries?' }] },
+  ])
+  aliceSuspendedTurn = await saveSuspendedTurn(alice, aliceConversation, {
+    runId: '22222222-2222-4222-8222-222222222222',
+    history: [],
+    completedResults: [],
+    pending: [{ id: 'w1', tool: 'set_budget', args: {}, summary: 'set a budget' }],
+    usage: { inputTokens: 10, outputTokens: 2, cachedTokens: 0, thoughtTokens: 0 },
+    costUsdEst: 0.0001,
+    iterations: 1,
+  })
+
   // Bob gets accounts but NO transactions. Every read below must therefore
   // come back empty for him — a far sharper assertion than "different", which
   // an off-by-one scoping bug could still satisfy.
@@ -90,6 +118,9 @@ describe('cross-tenant isolation', () => {
     ['budgetStatus', (o) => budgetStatus(o, '2025-03')],
     ['listRules', (o) => listRules(o)],
     ['listBudgets', (o) => listBudgets(o)],
+    // Given Alice's conversation id outright. Guessing an id is not the threat
+    // model — being handed one is.
+    ['loadHistory', (o) => loadHistory(o, aliceConversation)],
   ]
 
   for (const [name, read] of emptyForBob) {
@@ -97,6 +128,19 @@ describe('cross-tenant isolation', () => {
       expect(await read(bob)).toEqual([])
     })
   }
+
+  it('does not offer Bob Alice as his latest conversation', async () => {
+    expect(await latestConversation(bob)).toBeUndefined()
+    expect((await latestConversation(alice))?.id).toBe(aliceConversation)
+  })
+
+  it('does not let Bob answer a confirmation waiting on Alice', async () => {
+    // The sharpest one here: a suspended turn holds a write the loop will run
+    // on resume. Taking someone else's would be executing a write in their
+    // ledger, not merely reading it.
+    expect(await takeSuspendedTurn(bob, aliceSuspendedTurn)).toBeUndefined()
+    expect(await takeSuspendedTurn(alice, aliceSuspendedTurn)).toBeDefined()
+  })
 
   it('gives Bob his own accounts but with zero balances', async () => {
     const accounts = await listAccounts(bob)

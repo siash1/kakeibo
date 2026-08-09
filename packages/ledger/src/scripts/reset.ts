@@ -1,6 +1,7 @@
-import { loadEnv } from '@kakeibo/core/env'
+import { env, loadEnv } from '@kakeibo/core/env'
 import { sql } from 'drizzle-orm'
 import { adminDb, closeDb } from '../db'
+import { assertResettable } from '../reset-guard'
 
 /**
  * `pnpm db:reset` — truncates ledger data, keeps the schema.
@@ -13,6 +14,7 @@ import { adminDb, closeDb } from '../db'
 loadEnv()
 
 async function main(): Promise<void> {
+  assertResettable(env().DATABASE_URL, env().ALLOW_DESTRUCTIVE_RESET)
   // adminDb: truncating every owner's data is precisely what the app role
   // must not be able to do.
   await adminDb().execute(

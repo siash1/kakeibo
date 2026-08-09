@@ -427,6 +427,37 @@ everything that happened", and the privacy page must say so plainly rather than
 leaving it implied. It is a small exposure here because ledgers are synthetic by
 default, but it is not zero once a visitor uploads a real statement.
 
+### 9.7 Correction: the containment test (Plan C, added 2026-08-09)
+
+§11's "Admin bypass containment" row asks for a test proving that the
+RLS-bypassing role is "referenced in `repo/admin.ts` and nowhere else." That
+sentence was unsatisfiable the day it was written, not merely hard to satisfy.
+`adminDb()` has to be held by more than the dashboard, for reasons that have
+nothing to do with reading one visitor's ledger from another's session:
+`repo/link.ts` repoints and deletes rows across exactly two named owners at
+once, which is precisely what RLS forbids scoping around; `repo/users.ts` and
+`repo/quota.ts` read and write `"user"` and `rate_limits`, neither of which
+carries an `owner_id` to scope by; `repo/flags.ts` reads a switch that belongs
+to the site, not a visitor; and `db.ts`, `repo/reaper.ts` and the migration and
+reset scripts are the connection's definition and the application's
+maintenance path, not the application itself. Enforcing the sentence literally
+meant either weakening one of those or writing a test that stays permanently
+skipped.
+
+`packages/ledger/src/admin-containment.test.ts` asserts the property the
+sentence was actually reaching for: the **set** of modules holding `adminDb()`
+equals a reviewed allowlist, with a stated reason against every entry, checked
+on both sides of the package boundary — once for `packages/ledger` itself
+(nine modules, `repo/admin.ts` among them), and once for the rest of the
+workspace, where exactly one legitimate holder exists:
+`apps/web/src/lib/auth.ts`, because Better Auth has to resolve a user from a
+session token before any owner is known, which is the query RLS exists to
+refuse in the first place. Adding a module to either list is then a visible
+line in a diff rather than a silent widening of the bypass, and the question a
+reviewer asks is the one the test's own comment asks: could this query have
+been owner-scoped instead? Only once that has a real answer does the entry
+belong, with its reason next to it.
+
 ## 10. Environments and deployment
 
 - **Vercel** for the app, **Neon** for Postgres.
@@ -457,7 +488,7 @@ default, but it is not zero once a visitor uploads a real statement.
 | Anonymous expiry | Reaper deletes >24h anonymous ledgers and nothing else |
 | Visitor map | Runs with no geo headers store nulls and the map renders without error |
 | Admin authorization | A non-admin session gets 404 on `/admin`; an admin gets 200 |
-| Admin bypass containment | The RLS-bypassing role is referenced in `repo/admin.ts` and nowhere else (a grep-level test) |
+| Admin bypass containment | The RLS-bypassing role is referenced in `repo/admin.ts` and nowhere else (a grep-level test) — corrected by §9.7 |
 | Operator actions | Pause and block each degrade to the replay fallback, and each writes an `operator_action` event |
 | Existing suites | Double-entry invariant and `pnpm injection:report` stay green in CI |
 

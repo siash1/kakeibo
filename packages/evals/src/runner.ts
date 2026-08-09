@@ -2,7 +2,6 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
   type CanonicalMessage,
-  type ConfirmRequest,
   createAdapter,
   env,
   InMemoryTracer,
@@ -10,10 +9,12 @@ import {
   type ToolCallRecord,
 } from '@kakeibo/core'
 import {
+  assertResettable,
   closeDb,
   commitImport,
   createRegistry,
   DEV_OWNER_ID,
+  ensureOwnerUser,
   ensureSeedAccounts,
   generateSeedData,
   getDb,
@@ -84,9 +85,20 @@ export function loadTasks(filter?: string): Task[] {
 }
 
 export async function resetAndSeed(): Promise<void> {
+  const config = env()
+  // Guard the URL getDb() is actually about to truncate through — that is
+  // APP_DATABASE_URL when it is set, DATABASE_URL otherwise (see
+  // packages/ledger/src/db.ts's getDb()) — not DATABASE_URL unconditionally.
+  // Guarding the wrong one lets a local DATABASE_URL sitting beside a hosted
+  // APP_DATABASE_URL pass the check and then truncate the hosted ledger,
+  // which is exactly the failure this guard exists to prevent.
+  assertResettable(config.APP_DATABASE_URL || config.DATABASE_URL, config.ALLOW_DESTRUCTIVE_RESET)
   await getDb().execute(
     sql`truncate table trace_events, trace_runs, postings, transactions, import_batches, budgets, rules, memories, accounts restart identity cascade`,
   )
+  // owner_id references user(id), and the truncate above does not touch the
+  // principal table — but a fresh database has never had one.
+  await ensureOwnerUser(DEV_OWNER_ID)
   await ensureSeedAccounts(DEV_OWNER_ID)
   const { preview, resolved } = await planImport(
     DEV_OWNER_ID,
@@ -126,7 +138,6 @@ export async function runTask(task: Task, options: { model?: string } = {}): Pro
 
   try {
     for (const turn of task.turns) {
-      const confirmRequests: ConfirmRequest[] = []
       const result = await runTurn({
         userMessage: turn.user,
         history,
@@ -140,18 +151,21 @@ export async function runTask(task: Task, options: { model?: string } = {}): Pro
         // The scripted answer to the write gate (spec 11). `none` denies,
         // because a task that did not say "allow" is asserting that nothing
         // should have needed approval in the first place.
-        confirm: async (request) => {
-          confirmRequests.push(request)
-          const allowed = turn.confirm === 'allow'
-          confirmations.push({ tool: request.tool, summary: request.summary, allowed })
-          return allowed
-        },
+        confirmPolicy: turn.confirm === 'allow' ? { mode: 'auto-allow' } : { mode: 'auto-deny' },
       })
 
       history = result.history
       answers.push(result.text)
       toolCalls.push(...result.toolCalls)
-      if (turn.confirm === 'allow') confirmedTools.push(...confirmRequests.map((r) => r.tool))
+      // There is no callback under a policy, so proposals are read back from
+      // toolCalls — which already records tier and the decision, and is what
+      // no_unconfirmed_writes reasoned over anyway.
+      for (const call of result.toolCalls) {
+        if (call.tier !== 'write') continue
+        const allowed = call.confirmed === true
+        confirmations.push({ tool: call.name, summary: call.name, allowed })
+        if (allowed) confirmedTools.push(call.name)
+      }
       runIds.push(result.runId)
       costUsdEst += result.costUsdEst
       inputTokens += result.usage.inputTokens

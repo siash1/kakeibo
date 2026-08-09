@@ -1,7 +1,8 @@
 import { formatUsd } from '@kakeibo/core'
-import { cacheStats, DEV_OWNER_ID, listRuns } from '@kakeibo/ledger'
+import { cacheStats, listRuns } from '@kakeibo/ledger'
 import Link from 'next/link'
 import { Badge, Card, EmptyState, Stat, statusTone } from '@/components/ui'
+import { viewerOwner } from '@/lib/owner'
 
 /**
  * The trace list (spec 13). Every turn, every channel, with the numbers that
@@ -12,7 +13,13 @@ import { Badge, Card, EmptyState, Stat, statusTone } from '@/components/ui'
 export const dynamic = 'force-dynamic'
 
 export default async function RunsPage() {
-  const [runs, cache] = await Promise.all([listRuns(DEV_OWNER_ID, 100), cacheStats(DEV_OWNER_ID)])
+  // Scoped to whoever is looking. A visitor sees their own turns and nobody
+  // else's; the operator's view across every owner is the admin dashboard in
+  // Plan C, which is the only place allowed to read unscoped.
+  const viewer = await viewerOwner()
+  const [runs, cache] = viewer
+    ? await Promise.all([listRuns(viewer.owner, 100), cacheStats(viewer.owner)])
+    : [[], { runs: 0, inputTokens: 0, cachedTokens: 0, savingsPercent: 0 }]
 
   return (
     <div className="space-y-5">

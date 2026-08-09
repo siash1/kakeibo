@@ -91,7 +91,8 @@ async function main(): Promise<void> {
       model: config.AGENT_MODEL,
       summarizerModel: config.SUMMARIZER_MODEL,
       channel: 'eval',
-      confirm: async () => false, // read-only conversation; nothing should ask
+      // Read-only conversation; nothing should ask, and anything that does is refused.
+      confirmPolicy: { mode: 'auto-deny' },
     })
     history = result.history
     rows.push({

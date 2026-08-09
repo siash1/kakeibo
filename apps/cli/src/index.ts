@@ -142,7 +142,8 @@ async function main(): Promise<void> {
       model,
       summarizerModel: config.SUMMARIZER_MODEL,
       channel: 'cli',
-      confirm,
+      // The CLI's decider is in this process, so it can simply block.
+      confirmPolicy: { mode: 'inline', confirm },
       memory,
       knownCategories: KNOWN_CATEGORIES,
       contextManager,

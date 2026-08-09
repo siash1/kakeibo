@@ -13,10 +13,12 @@
     "generate": "drizzle-kit generate",
     "migrate": "tsx src/scripts/migrate.ts",
     "seed": "tsx src/scripts/seed.ts",
-    "reset": "tsx src/scripts/reset.ts"
+    "reset": "tsx src/scripts/reset.ts",
+    "reap": "tsx src/scripts/reap.ts"
   },
   "dependencies": {
     "@kakeibo/core": "workspace:*",
+    "better-auth": "^1.6.26",
     "drizzle-orm": "^0.44.7",
     "pg": "^8.16.3",
     "zod": "^4.1.13"

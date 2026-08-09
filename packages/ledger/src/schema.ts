@@ -1,7 +1,9 @@
 import {
   bigint,
+  boolean,
   char,
   date,
+  doublePrecision,
   index,
   integer,
   jsonb,
@@ -13,6 +15,7 @@ import {
   unique,
   uuid,
 } from 'drizzle-orm/pg-core'
+import { user } from './auth-schema'
 
 /**
  * The ledger schema (spec 7).
@@ -30,13 +33,19 @@ import {
  */
 
 /**
- * Owner of the row.
+ * Owner of the row: always a Better Auth `user.id`, anonymous visitors
+ * included — they are users who have not attached credentials yet.
  *
- * No foreign key yet: the principal table arrives with Better Auth in Plan B,
- * and a column cannot reference a table that does not exist. Plan B adds
- * `references "user"(id) on delete cascade` in its own migration.
+ * The cascade is load-bearing rather than tidiness. Deleting a user is the
+ * whole implementation of two features: the 24-hour anonymous reaper, and the
+ * "delete everything" action on /settings. Without it each of them would need
+ * its own list of owner-scoped tables, and the table someone forgets to add is
+ * a row that outlives the account that owned it.
  */
-const ownerId = () => uuid('owner_id').notNull()
+const ownerId = () =>
+  uuid('owner_id')
+    .notNull()
+    .references(() => user.id, { onDelete: 'cascade' })
 
 export const accountTypeEnum = pgEnum('account_type', [
   'asset',
@@ -172,6 +181,19 @@ export const traceRuns = pgTable(
     costUsdEst: numeric('cost_usd_est', { precision: 10, scale: 6 }).notNull().default('0'),
     latencyMs: integer('latency_ms').notNull().default(0),
     channel: channelEnum('channel').notNull(),
+    /**
+     * Coarse location, from the request address at the edge (spec §9.5).
+     *
+     * All nullable: absent in local development and for any address the edge
+     * cannot resolve, which the map is required to render without complaint.
+     * Stored per run rather than per user so the map shows activity rather than a
+     * roster of people, and so it ages out with trace data.
+     */
+    geoCountry: char('geo_country', { length: 2 }),
+    geoRegion: text('geo_region'),
+    geoCity: text('geo_city'),
+    geoLat: doublePrecision('geo_lat'),
+    geoLon: doublePrecision('geo_lon'),
   },
   (table) => [index('trace_runs_owner_started_idx').on(table.ownerId, table.startedAt)],
 )
@@ -196,6 +218,125 @@ export const traceEvents = pgTable(
   (table) => [index('trace_events_owner_run_idx').on(table.ownerId, table.runId, table.seq)],
 )
 
+/**
+ * A chat thread (spec §3.3).
+ *
+ * History used to live in a module-level Map keyed by a made-up session id.
+ * That works for exactly one process and one visitor; on serverless the next
+ * request is a different invocation with a different heap.
+ */
+export const conversations = pgTable(
+  'conversations',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ownerId: ownerId(),
+    title: text('title'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index('conversations_owner_updated_idx').on(table.ownerId, table.updatedAt)],
+)
+
+/**
+ * One `CanonicalMessage` per row, stored **verbatim**.
+ *
+ * Nothing here maps, renames or filters fields. Gemini 3.x attaches an opaque
+ * `thoughtSignature` to functionCall parts and replaying a tool turn without it
+ * is a hard 400 — so a persistence layer that tidies the message shape breaks
+ * only on tool turns, only after a suspension, and only in production.
+ */
+export const conversationMessages = pgTable(
+  'conversation_messages',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ownerId: ownerId(),
+    conversationId: uuid('conversation_id')
+      .notNull()
+      .references(() => conversations.id, { onDelete: 'cascade' }),
+    seq: integer('seq').notNull(),
+    message: jsonb('message').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('conversation_messages_owner_conversation_idx').on(
+      table.ownerId,
+      table.conversationId,
+      table.seq,
+    ),
+    // Two writers appending at once collide here rather than silently
+    // interleaving into a history the provider will reject.
+    unique('conversation_messages_conversation_seq_key').on(table.conversationId, table.seq),
+  ],
+)
+
+/**
+ * A turn paused at a write, waiting for a human (spec §6).
+ *
+ * `usage` and `cost_usd_est` are stored deliberately. The model calls made
+ * before the pause are real spend, and a resumed turn starting its totals at
+ * zero would leave them out of `trace_runs` — which is exactly the spend the
+ * global budget cap most needs to see, since turns involving a confirmation
+ * are the expensive ones.
+ */
+export const suspendedTurns = pgTable(
+  'suspended_turns',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ownerId: ownerId(),
+    conversationId: uuid('conversation_id')
+      .notNull()
+      .references(() => conversations.id, { onDelete: 'cascade' }),
+    /** The trace run this turn belongs to, so resume continues one trace. */
+    runId: uuid('run_id').notNull(),
+    /** Messages up to and including the assistant turn that requested the tools. */
+    history: jsonb('history').notNull(),
+    /** Read-tier results already executed, so resume does not run them again. */
+    completedResults: jsonb('completed_results').notNull(),
+    /** PendingConfirmation[] — the writes a human has not yet ruled on. */
+    pending: jsonb('pending').notNull(),
+    usage: jsonb('usage').notNull(),
+    costUsdEst: numeric('cost_usd_est', { precision: 10, scale: 6 }).notNull().default('0'),
+    iterations: integer('iterations').notNull().default(0),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    /** An abandoned confirmation must not be answerable a week later. */
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  },
+  (table) => [
+    index('suspended_turns_owner_conversation_idx').on(table.ownerId, table.conversationId),
+  ],
+)
+
+/**
+ * The per-IP message counter (spec §5, layer 2).
+ *
+ * The only new table that is deliberately NOT owner-scoped, and the only one
+ * with no RLS policy: its whole job is to survive a visitor clearing their
+ * cookies and minting a fresh anonymous user, which is precisely a change of
+ * owner. Scoping it by owner would defeat it.
+ *
+ * The key is `sha256(ip + RATE_LIMIT_SALT + date)`, so no raw address is ever
+ * stored and yesterday's keys cannot be correlated with today's.
+ */
+export const rateLimits = pgTable('rate_limits', {
+  key: text('key').primaryKey(),
+  windowStart: date('window_start').notNull(),
+  count: integer('count').notNull().default(0),
+})
+
+/**
+ * Operator switches (spec §9.4).
+ *
+ * A table rather than an environment variable because an env change is a
+ * redeploy, and the point of a kill switch is that it works during an incident,
+ * from a phone, in seconds. Not owner-scoped and deliberately without an RLS
+ * policy: it is a property of the site, not of a visitor.
+ */
+export const operatorFlags = pgTable('operator_flags', {
+  key: text('key').primaryKey(),
+  value: boolean('value').notNull().default(false),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
 export type Account = typeof accounts.$inferSelect
 export type Transaction = typeof transactions.$inferSelect
 export type Posting = typeof postings.$inferSelect
@@ -205,3 +346,8 @@ export type MemoryRow = typeof memories.$inferSelect
 export type ImportBatch = typeof importBatches.$inferSelect
 export type TraceRun = typeof traceRuns.$inferSelect
 export type TraceEvent = typeof traceEvents.$inferSelect
+export type Conversation = typeof conversations.$inferSelect
+export type ConversationMessage = typeof conversationMessages.$inferSelect
+export type SuspendedTurnRow = typeof suspendedTurns.$inferSelect
+export type RateLimit = typeof rateLimits.$inferSelect
+export type OperatorFlagRow = typeof operatorFlags.$inferSelect

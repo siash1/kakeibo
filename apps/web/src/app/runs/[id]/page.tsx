@@ -1,8 +1,10 @@
 import { formatUsd } from '@kakeibo/core'
-import { DEV_OWNER_ID, getRun } from '@kakeibo/ledger'
+import { adminGetRun, getRun } from '@kakeibo/ledger'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { Badge, Card, Stat, statusTone } from '@/components/ui'
+import { adminSession } from '@/lib/admin'
+import { viewerOwner } from '@/lib/owner'
 
 /**
  * The per-run timeline (spec 13).
@@ -29,7 +31,19 @@ interface EventRow {
 
 export default async function RunPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const data = await getRun(DEV_OWNER_ID, id)
+  // 404 rather than 403 for someone else's run: getRun is owner-scoped and
+  // returns nothing, so the page cannot even confirm the run exists.
+  const viewer = await viewerOwner()
+  let data = viewer ? await getRun(viewer.owner, id) : undefined
+  // The operator's own links (recent runs, blocked runs) point at other
+  // owners' runs, which the scoped read above can never find. Falling back
+  // to the one door only after it comes back empty, and only for a verified
+  // operator session, means a non-operator's behaviour is unchanged: still
+  // 404, never a 403, and never a hint that the run exists.
+  if (!data) {
+    const admin = await adminSession()
+    if (admin) data = await adminGetRun(admin, id)
+  }
   if (!data) notFound()
 
   const { run, events } = data
