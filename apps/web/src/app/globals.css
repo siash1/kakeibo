@@ -164,24 +164,43 @@ body {
 }
 
 /*
- * 方眼 — the account book's own grid. A 24px rule grid, printed faintly, used
- * as the ground of a page rather than as a decorative texture. It is the one
- * material the paper genre has instead of an accent colour, so it does real
- * structural work: sections sit on it, and figures align to it.
+ * There is deliberately no 方眼 grid-paper texture here.
+ *
+ * An earlier pass shipped one, unused, with a comment claiming it did "real
+ * structural work: sections sit on it, and figures align to it". Nothing in the
+ * built pages ever aligned to it, which made the claim the CSS equivalent of an
+ * unmeasured number in the README — and a tiled hairline grid behind a hero is
+ * one of the most reliable tells of a generated interface, which the design
+ * detector flags on sight.
+ *
+ * The paper genre's material is the rules themselves: the section rules, the
+ * row hairlines, the double rule under a total. Those are load-bearing on every
+ * page, they are what the no-accent decision leans on for emphasis, and they
+ * need no field of decoration behind them. If a surface ever genuinely sets
+ * figures on a 24px grid, bring it back then, with the alignment that earns it.
  */
-.grid-paper {
-  background-image:
-    linear-gradient(to right, var(--color-rule) 1px, transparent 1px),
-    linear-gradient(to bottom, var(--color-rule) 1px, transparent 1px);
-  background-size: 24px 24px;
-  background-position: -1px -1px;
-}
 
 /* A ruled underline that sits below the baseline rather than through it. */
 [data-genre='paper'] a:not([class*='no-underline']) {
   text-underline-offset: 0.22em;
   text-decoration-thickness: from-font;
 }
+
+/*
+ * There is deliberately no entrance animation on the statement rows.
+ *
+ * A scroll-driven `view()` reveal was built here and then removed after a
+ * screenshot showed what it actually does: the rows start at opacity 0 and only
+ * the ones the timeline has reached are legible, so a full-page capture — and,
+ * equally, printing, an in-page find, or a deep link landing mid-document —
+ * shows a statement with a hole in the middle of it. The craft rule it broke is
+ * the plain one: animate from an already-visible default, never into existence.
+ *
+ * The motion this product actually has is not decorative and is already built:
+ * on /chat the margin entries post one at a time as the agent calls each tool,
+ * driven by the stream rather than by the scrollbar. That is the authored
+ * moment, and it is real.
+ */
 
 @keyframes pulse-dot {
   0%,

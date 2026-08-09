@@ -92,6 +92,23 @@ export function Empty({ title, hint }: { title: string; hint?: string }) {
 }
 
 /**
+ * A line in a margin rail: a label and its value, ruled.
+ *
+ * The book's own way of noting what a page is — the period it covers, the model
+ * that produced it, the file it was read from. Kept here rather than copied into
+ * each page because three slightly different versions of this row is exactly how
+ * a ruled layout stops looking ruled.
+ */
+export function MetaLine({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3 border-b border-rule py-[5px]">
+      <dt className="text-[11px] uppercase tracking-[0.09em] text-sumi-500">{label}</dt>
+      <dd className="num min-w-0 truncate text-right text-[12px] text-sumi-900">{value}</dd>
+    </div>
+  )
+}
+
+/**
  * A status word. Never colour alone — the word carries the meaning and the
  * colour reinforces it, which is also what keeps it legible in forced-colors
  * mode and for a colour-blind reader.

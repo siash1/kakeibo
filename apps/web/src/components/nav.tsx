@@ -2,10 +2,11 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { Wordmark } from '@/components/mark'
 import { cn } from '@/lib/cn'
 
 const LINKS = [
-  { href: '/', label: 'chat' },
+  { href: '/chat', label: 'chat' },
   { href: '/dashboard', label: 'dashboard' },
   { href: '/runs', label: 'traces' },
   { href: '/evals', label: 'evals' },
@@ -31,23 +32,29 @@ export function Nav({ showAdmin = false }: { showAdmin?: boolean }) {
 
   return (
     <header className="sticky top-0 z-20 border-b border-current/12 bg-inherit backdrop-blur">
-      <div className="mx-auto flex h-14 max-w-6xl items-center gap-7 px-6">
-        <Link href="/" className="group flex items-baseline gap-2 no-underline">
-          <span className="font-serif text-[15px] font-semibold tracking-tight">kakeibo</span>
-          <span className="text-[11px] opacity-45 transition-opacity group-hover:opacity-70">
-            家計簿
-          </span>
+      {/*
+       * At 390px the wordmark, the kanji and five links do not fit, and the
+       * failure was not a graceful one: the kanji wrapped to three stacked
+       * characters and the last link was cut off at the edge. Two things give
+       * way. The kanji goes first — `Wordmark` hides it below `sm`, since the
+       * latin already identifies the site — and the links then scroll rather
+       * than truncate, because an operator on a phone still needs to reach the
+       * link that sits last.
+       */}
+      <div className="mx-auto flex h-14 max-w-6xl items-center gap-4 px-6 sm:gap-7">
+        <Link href="/" className="shrink-0 no-underline" aria-label="kakeibo — home">
+          <Wordmark className="text-[15px]" />
         </Link>
-        <nav className="flex items-center gap-1">
+        <nav className="-mx-1 flex min-w-0 items-center gap-1 overflow-x-auto px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {links.map((link) => {
-            const active = link.href === '/' ? pathname === '/' : pathname.startsWith(link.href)
+            const active = pathname.startsWith(link.href)
             return (
               <Link
                 key={link.href}
                 href={link.href}
                 aria-current={active ? 'page' : undefined}
                 className={cn(
-                  'rounded px-2.5 py-1 text-[13px] no-underline transition-opacity',
+                  'shrink-0 rounded px-2.5 py-1 text-[13px] no-underline transition-opacity',
                   active ? 'opacity-100' : 'opacity-50 hover:opacity-80',
                 )}
               >

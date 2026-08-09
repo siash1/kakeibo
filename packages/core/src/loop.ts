@@ -494,7 +494,17 @@ async function executeToolUse(
     options.onToolResult?.({
       id: use.id,
       name: use.name,
-      summary: truncate(content, 200),
+      // Wide enough that a typical read tool's payload arrives as valid JSON.
+      //
+      // This event exists only to be displayed, and every consumer already cuts
+      // it to its own width: the CLI to 90 columns, the web margin rail to one
+      // line. Cutting it to 200 here as well did not save those consumers any
+      // work — it just guaranteed the value reached them as a fragment ending
+      // mid-token, which cannot be parsed into "12 rows, ₹1,58,160.00" and so
+      // could only be shown as a fragment. A report or a budget summary fits in
+      // this; a 40kB search result still does not, and is still cut, which is
+      // the point of having a bound at all.
+      summary: truncate(content, 4000),
       isError,
     })
     return {
