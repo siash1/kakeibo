@@ -118,10 +118,22 @@ describe('requestGeo', () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
+First widen the runner, in this same commit — `vitest.config.ts`'s `include` is `['packages/*/src/**/*.test.ts', 'packages/*/test/**/*.test.ts', 'tests/**/*.test.ts']` and does not cover `apps/`, so without this the file is silently never run by `pnpm test`:
+
+```ts
+include: [
+  'packages/*/src/**/*.test.ts',
+  'packages/*/test/**/*.test.ts',
+  // apps/web has its first unit test as of this task. Without this line the
+  // file runs when named directly and never runs in CI, which is worse than
+  // having no test at all.
+  'apps/*/src/**/*.test.ts',
+  'tests/**/*.test.ts',
+],
+```
+
 Run: `npx vitest run apps/web/src/lib/geo.test.ts`
 Expected: FAIL — `Cannot find module './geo'`.
-
-Note: `vitest.config.ts` currently includes `packages` and `tests`. If this file is not picked up, add `apps/web/src/**/*.test.ts` to the `include` array in the same commit and say so.
 
 - [ ] **Step 3: Write the header reader**
 
@@ -555,6 +567,15 @@ Add `boolean` to the `drizzle-orm/pg-core` import.
 
 - [ ] **Step 2: Write the failing test**
 
+The flag is site-wide, so a test that leaves it set breaks every suite that runs after it. Clear it in an `afterEach` rather than on the last line of the test — a trailing call does not run when an assertion above it fails, and `vitest.config.ts` sets `fileParallelism: false`, so one poisoned flag would take the rest of the run with it:
+
+```ts
+// packages/ledger/src/repo/quota.test.ts, beside the existing hooks
+afterEach(async () => {
+  await setFlag('live_chat_paused', false)
+})
+```
+
 ```ts
 // append to packages/ledger/src/repo/quota.test.ts, inside describe('consumeQuota')
 it('refuses everyone while live chat is paused, and lets them back afterwards', async () => {
@@ -683,7 +704,7 @@ write is an operator action and lands there in a later task."
 - Modify: `packages/core/src/env.ts`, `packages/ledger/src/index.ts`, `.env.example`
 
 **Interfaces:**
-- Produces: `AdminSession` and `assertAdmin` in `packages/ledger/src/repo/admin.ts`; `adminSession(): Promise<AdminSession | undefined>` in `apps/web/src/lib/admin.ts`.
+- Produces: `AdminSession`, `assertAdmin(email: string | undefined | null): AdminSession | undefined` and `adminOwnerId(session: AdminSession): Promise<string | undefined>` in `packages/ledger/src/repo/admin.ts`; `adminSession(): Promise<AdminSession | undefined>` in `apps/web/src/lib/admin.ts`.
 - Consumes: `viewerOwner()` from `apps/web/src/lib/owner.ts`.
 
 **The security-critical task.** Everything after this one adds functions to a module that can read across every owner, which is precisely what Plan A's row-level security exists to prevent. This task builds the door and the test that says there is only one.
@@ -842,7 +863,26 @@ export function assertAdmin(email: string | undefined | null): AdminSession | un
 function unscoped() {
   return adminDb()
 }
+
+/**
+ * The operator's own `user.id`, or undefined if they have never signed in here.
+ *
+ * Belongs with authorization rather than with the panels: it is the second half
+ * of turning a verified session into something the database can talk about. The
+ * audit trail in the operator actions needs it, because `trace_runs.owner_id`
+ * references `"user"(id)` and a site-wide action has no visitor to attribute to.
+ */
+export async function adminOwnerId(session: AdminSession): Promise<string | undefined> {
+  const [row] = await unscoped()
+    .select({ id: user.id })
+    .from(user)
+    .where(eq(user.email, session.email))
+    .limit(1)
+  return row?.id
+}
 ```
+
+with `import { eq } from 'drizzle-orm'` and `import { user } from '../auth-schema'`.
 
 - [ ] **Step 4: Add the env var**
 
@@ -946,7 +986,7 @@ npx vitest run packages/ledger/src/admin-containment.test.ts packages/ledger/src
 pnpm lint && pnpm typecheck && pnpm test
 ```
 
-Expected: all green. `unscoped()` is unused at this point — Biome's `noUnusedVariables` covers variables, not module-private functions, but if it complains, add the first panel from Task 5 in the same commit rather than exporting `unscoped`.
+Expected: all green. `adminOwnerId` is `unscoped()`'s first caller, so the module holds the connection the containment test expects it to hold and nothing is left unused.
 
 - [ ] **Step 8: Commit**
 
@@ -2026,13 +2066,6 @@ async function audit(
  * usually not cost, and waiting for a cap to catch up is not an incident
  * response. Visitors get the same graceful fallback as a quota trip.
  */
-export async function pauseLiveChat(session: AdminSession, paused: boolean): Promise<void> {
-  await setFlag('live_chat_paused', paused)
-  // Audited against the operator themselves: there is no visitor to attribute
-  // a site-wide switch to.
-  await audit(session, ADMIN_AUDIT_OWNER, 'pause_live_chat', { paused })
-}
-
 export async function blockOwner(
   session: AdminSession,
   ownerId: string,
@@ -2046,28 +2079,17 @@ export async function blockOwner(
 }
 ```
 
-`ADMIN_AUDIT_OWNER` is a problem worth solving deliberately rather than papering over: `trace_runs.owner_id` references `"user"(id)`, so a site-wide action has no natural owner. Resolve it by attributing site-wide actions to the operator's own user row, looked up by email:
+A site-wide action has no natural owner, and `trace_runs.owner_id` references `"user"(id)` — so `pauseLiveChat` attributes its audit entry to the operator's own row via `adminOwnerId` from Task 4:
 
 ```ts
-/** The operator's own user id, so a site-wide action has an owner the FK accepts. */
-async function operatorOwnerId(session: AdminSession): Promise<string | undefined> {
-  const [row] = await unscoped()
-    .select({ id: user.id })
-    .from(user)
-    .where(eq(user.email, session.email))
-    .limit(1)
-  return row?.id
+export async function pauseLiveChat(session: AdminSession, paused: boolean): Promise<void> {
+  await setFlag('live_chat_paused', paused)
+  const owner = await adminOwnerId(session)
+  // If the operator has no account row yet, the switch still flips and only
+  // the audit entry is skipped. Losing an audit line is better than refusing
+  // to pause during an incident.
+  if (owner) await audit(session, owner, 'pause_live_chat', { paused })
 }
-```
-
-and in `pauseLiveChat`:
-
-```ts
-const owner = await operatorOwnerId(session)
-// If the operator has no account yet the switch still flips; the audit entry
-// is the part that is skipped, and losing it is better than refusing to pause
-// during an incident.
-if (owner) await audit(session, owner, 'pause_live_chat', { paused })
 ```
 
 - [ ] **Step 4: Write the route**
