@@ -31,6 +31,10 @@ own statement exists, works, and is deliberately secondary.
 | Admin | Single-operator dashboard at `/admin`, allowlist by email (see §9) |
 | Visitor map | Coarse city-level location from request IP via Vercel edge headers; no browser prompt |
 
+*Amended 2026-08-10 (owner).* The second half of the entry decision no longer
+holds: there is no way to persist, because there is no sign-up. Anonymous
+try-it-now is the whole entry model. See the §7 amendment for what that removes.
+
 ### Success criteria
 
 1. A first-time visitor can ask the agent a real question about a real ledger
@@ -289,9 +293,16 @@ framing, the tier system and the injection defences are untouched.
 | `/dashboard` | Spend by category, budget meters, recurring, anomalies | warm editorial |
 | `/runs`, `/runs/[id]` | Trace viewer | **terminal — unchanged genre** |
 | `/evals` | Eval report | warm editorial |
-| `/settings` | Delete everything, sign out, link account | warm editorial |
 | `/privacy`, `/terms` | Legal | warm editorial |
 | `/admin` | Operator dashboard (§9) | terminal — matches the trace viewer |
+
+*Amended 2026-08-10 (owner).* `/settings` is removed and there is no sign-up
+page. Deletion — its one job that survives — moves onto `/privacy`, next to the
+sentence that promises it. A single unlinked `/sign-in` exists as the operator's
+door to `/admin`; it is email-and-password only, carries no sign-up form, and is
+linked from nowhere. The consequence is deliberate and worth stating: no visitor
+can create an account, so every visitor is anonymous and the 24-hour reaper
+applies to all of them without exception.
 
 Visual design is Phase 2 and is specified separately. The trace viewer keeps its
 monospace terminal aesthetic deliberately: it is the right genre for that
@@ -311,8 +322,10 @@ content.
   and only derived rows are stored.
 - **Anonymous retention is 24 hours**, stated plainly in the UI at the point of
   upload, enforced by a nightly reaper, and cleared by signing in.
-- **Deletion.** `/settings` offers one-click deletion of the entire ledger and
-  of the account, cascading through `owner_id`.
+- **Deletion.** `/privacy` offers one-click deletion of the visitor's entire
+  ledger and their anonymous account, cascading through `owner_id`. It sits on
+  the privacy page rather than on a settings page because the control belongs
+  beside the promise it honours, and because there is no account to manage.
 - **Privacy page** states what is stored, for how long, that the site is a
   demonstration rather than a financial service, and that the operator can view
   diagnostic traces which include ledger contents (§9.6), and that an
