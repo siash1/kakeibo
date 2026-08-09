@@ -91,6 +91,7 @@ export {
   setBudget,
   setCategoryRule,
 } from './repo/writes'
+export { assertResettable } from './reset-guard'
 export {
   generateSeedData,
   HOSTILE_DESCRIPTIONS,

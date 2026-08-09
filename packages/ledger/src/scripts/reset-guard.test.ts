@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { assertResettable } from './reset'
+import { assertResettable } from '../reset-guard'
 
 const LOCAL = 'postgres://kakeibo:kakeibo@localhost:5433/kakeibo'
 const NEON = 'postgres://user:pw@ep-cool-name-123456.ap-south-1.aws.neon.tech/kakeibo'

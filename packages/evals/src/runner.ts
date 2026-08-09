@@ -9,6 +9,7 @@ import {
   type ToolCallRecord,
 } from '@kakeibo/core'
 import {
+  assertResettable,
   closeDb,
   commitImport,
   createRegistry,
@@ -24,7 +25,6 @@ import {
 } from '@kakeibo/ledger'
 import { sql } from 'drizzle-orm'
 import { parse as parseYaml } from 'yaml'
-import { assertResettable } from '../../ledger/src/scripts/reset'
 import { isJudge, runCheck } from './checks'
 import { type EvalReport, type Task, type TaskResult, TaskSchema } from './types'
 
