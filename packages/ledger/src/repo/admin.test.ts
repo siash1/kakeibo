@@ -8,6 +8,7 @@ import { traceEvents, traceRuns } from '../schema'
 import { resetOwners } from '../testing'
 import {
   type AdminSession,
+  adminGetRun,
   assertAdmin,
   blockOwner,
   budgetPanel,
@@ -22,6 +23,7 @@ import {
   usersPanel,
 } from './admin'
 import { consumeQuota, messagesToday } from './quota'
+import { getRun } from './tracer'
 
 function allowlist(value: string): void {
   process.env.ADMIN_EMAILS = value
@@ -561,6 +563,50 @@ describe('recentRuns', () => {
     expect(runB?.ownerEmail).toBe(`${runnerB}@kakeibo.local`)
     expect(runB?.ownerIsAnonymous).toBe(false)
     expect(runB?.costUsdEst).toBeCloseTo(0.02, 6)
+  })
+})
+
+describe('adminGetRun', () => {
+  const owner = asOwnerId('00000000-0000-4000-8000-0000000ad040')
+  const stranger = asOwnerId('00000000-0000-4000-8000-0000000ad041')
+  let runId: string
+
+  beforeAll(async () => {
+    await resetOwners(owner, stranger)
+    runId = await auditedRun(owner, [
+      {
+        type: 'tool_call',
+        payload: { name: 'list_accounts', tier: 'read', args: {}, result: 'ok' },
+        latencyMs: 5,
+      },
+    ])
+  }, 60_000)
+
+  afterAll(async () => {
+    await resetOwners(owner, stranger)
+  })
+
+  it('reads another owner’s run through the one door', async () => {
+    // This is the drill-down every panel link on /admin points at — recentRuns
+    // and safetyPanel.blockedRuns both link to /runs/[id] for a run that
+    // essentially never belongs to the operator.
+    const data = await adminGetRun(session(), runId)
+    expect(data?.run.id).toBe(runId)
+    expect(data?.run.ownerId).toBe(owner)
+    expect(data?.events).toHaveLength(1)
+    expect(data?.events[0]?.type).toBe('tool_call')
+  })
+
+  it('returns undefined for a run that does not exist, same as getRun', async () => {
+    expect(await adminGetRun(session(), '00000000-0000-4000-8000-000000000000')).toBeUndefined()
+  })
+
+  it('the owner-scoped getRun still refuses a stranger — the fallback does not widen it', async () => {
+    // adminGetRun exists precisely because getRun must stay owner-scoped; this
+    // pins that getRun's own behaviour is untouched by adding the fallback.
+    expect(await getRun(stranger, runId)).toBeUndefined()
+    // The true owner can still read it the normal way.
+    expect((await getRun(owner, runId))?.run.id).toBe(runId)
   })
 })
 

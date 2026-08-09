@@ -5,6 +5,10 @@ import { user } from '../auth-schema'
 import { adminDb } from '../db'
 import { traceEvents, traceRuns } from '../schema'
 import { isLiveChatPaused, setFlag } from './flags'
+// Type-only: `adminGetRun` below returns exactly what `getRun` returns, so its
+// shape is derived rather than duplicated. `import type` erases this at
+// runtime, so it does not give admin.ts a second way to reach a scoped read.
+import type { getRun } from './tracer'
 
 /**
  * The operator dashboard (spec §9).
@@ -92,6 +96,17 @@ export async function adminOwnerId(session: AdminSession): Promise<string | unde
 }
 
 const DAYS = 30
+
+/**
+ * A trailing `DAYS`-day window is `DAYS - 1` days *before* `UTC_DAY_START`,
+ * not `DAYS`: today is one of the days being counted, so subtracting the
+ * full `DAYS` reaches back one day too far and turns "30 days" into 31 —
+ * `UTC_DAY_START` itself plus 30 days before it. The sparkline below (which
+ * this page's own aria-label calls "30-day spend") already builds its range
+ * with `DAYS - 1`; `WINDOW` and the `d30` traffic figures did not, and this
+ * repo's final whole-branch review is what caught the mismatch against the
+ * "30 days" the page's labels and copy assert everywhere else.
+ */
 
 /**
  * Midnight at the start of today, UTC — as a `timestamptz` *instant*, not a
@@ -269,11 +284,13 @@ export async function trafficPanel(_session: AdminSession): Promise<TrafficPanel
   // by kind, rather than a raw count of every row in "user". The two have to
   // agree by construction (`anonymous + signedIn === visitors.d30`): a signed-in
   // account that never came back would inflate a raw table count without ever
-  // being a visitor, and the same window as `active(DAYS)` is what keeps the
-  // two numbers describing the same set of people. `IS_VISITOR_RUN` matters
-  // here for that same construction: without it, an owner whose only row
-  // today is an operator's audit entry would count on this side of the split
-  // but not in `active(DAYS)`, and the invariant would break.
+  // being a visitor, and the same window as `active(DAYS - 1)` is what keeps
+  // the two numbers describing the same set of people — which is also why this
+  // window has to move in lockstep with that call below rather than drift
+  // independently. `IS_VISITOR_RUN` matters here for that same construction:
+  // without it, an owner whose only row today is an operator's audit entry
+  // would count on this side of the split but not in `active(DAYS - 1)`, and
+  // the invariant would break.
   const [kinds] = await db
     .select({
       anonymous: sql<string>`count(distinct ${traceRuns.ownerId}) filter (where ${user.isAnonymous} is true)`,
@@ -283,7 +300,7 @@ export async function trafficPanel(_session: AdminSession): Promise<TrafficPanel
     .innerJoin(user, eq(user.id, traceRuns.ownerId))
     .where(
       and(
-        gte(traceRuns.startedAt, sql`${UTC_DAY_START} - ${DAYS} * interval '1 day'`),
+        gte(traceRuns.startedAt, sql`${UTC_DAY_START} - ${DAYS - 1} * interval '1 day'`),
         IS_VISITOR_RUN,
       ),
     )
@@ -332,7 +349,11 @@ export async function trafficPanel(_session: AdminSession): Promise<TrafficPanel
     )
 
   return {
-    visitors: { today: await active(0), d7: await active(7), d30: await active(DAYS) },
+    // DAYS - 1, not DAYS: see the comment on DAYS above. today's `active(0)`
+    // needs no such adjustment — a single day's window is already "0 days
+    // before today" — which is why it, and d7 (unflagged by the review that
+    // caught this), are left as they were.
+    visitors: { today: await active(0), d7: await active(7), d30: await active(DAYS - 1) },
     anonymous,
     signedIn,
     // A percentage, not a fraction, and 0 rather than NaN when there is nobody
@@ -343,14 +364,16 @@ export async function trafficPanel(_session: AdminSession): Promise<TrafficPanel
 }
 
 /**
- * The trailing window the health, safety and tools panels aggregate over.
+ * The trailing window the health, safety and tools panels aggregate over —
+ * a true `DAYS` (30) days, today included: see the comment on `DAYS` above
+ * for why the subtraction is `DAYS - 1`, not `DAYS`.
  *
  * Built from `UTC_DAY_START`, not from a bare `current_date`: the latter casts
  * back through the session's timezone (`Asia/Kolkata` on this database) and
  * would silently shift the window by that offset, the same bug the sparkline
  * and month-to-date bounds above were fixed for.
  */
-const WINDOW = sql`${UTC_DAY_START} - ${DAYS} * interval '1 day'`
+const WINDOW = sql`${UTC_DAY_START} - ${DAYS - 1} * interval '1 day'`
 
 export interface HealthPanel {
   byStatus: { ok: number; error: number; blocked: number; aborted: number }
@@ -603,6 +626,47 @@ export async function recentRuns(_session: AdminSession, limit = 100): Promise<A
     ownerEmail: row.ownerEmail ?? null,
     ownerIsAnonymous: row.ownerIsAnonymous === true,
   }))
+}
+
+/**
+ * The operator's drill-down into another owner's run.
+ *
+ * Every cross-owner link on the dashboard — `recentRuns`, and
+ * `safetyPanel.blockedRuns` — points at `/runs/[id]`, and that page's own
+ * read, `getRun`, is owner-scoped: it returns undefined for anyone but the
+ * run's own owner, which is exactly right for a visitor and exactly wrong for
+ * the operator looking at someone else's row. This is the fallback the page
+ * reaches for when the scoped read comes back empty and the caller has an
+ * `AdminSession` — same shape as `getRun`, so the page renders either result
+ * the same way without needing to know which function answered.
+ */
+export async function adminGetRun(
+  _session: AdminSession,
+  id: string,
+): Promise<Awaited<ReturnType<typeof getRun>>> {
+  const db = unscoped()
+  const [run] = await db.select().from(traceRuns).where(eq(traceRuns.id, id)).limit(1)
+  if (!run) return undefined
+  const events = await db
+    .select()
+    .from(traceEvents)
+    .where(eq(traceEvents.runId, id))
+    .orderBy(traceEvents.seq)
+  return {
+    run: {
+      ...run,
+      inputTokens: Number(run.inputTokens),
+      outputTokens: Number(run.outputTokens),
+      cachedTokens: Number(run.cachedTokens),
+      costUsdEst: Number(run.costUsdEst),
+    },
+    events: events.map((event) => ({
+      ...event,
+      inputTokens: event.inputTokens === null ? null : Number(event.inputTokens),
+      outputTokens: event.outputTokens === null ? null : Number(event.outputTokens),
+      cachedTokens: event.cachedTokens === null ? null : Number(event.cachedTokens),
+    })),
+  }
 }
 
 export interface AdminUser {

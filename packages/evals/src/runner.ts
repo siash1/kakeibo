@@ -85,7 +85,14 @@ export function loadTasks(filter?: string): Task[] {
 }
 
 export async function resetAndSeed(): Promise<void> {
-  assertResettable(env().DATABASE_URL, env().ALLOW_DESTRUCTIVE_RESET)
+  const config = env()
+  // Guard the URL getDb() is actually about to truncate through — that is
+  // APP_DATABASE_URL when it is set, DATABASE_URL otherwise (see
+  // packages/ledger/src/db.ts's getDb()) — not DATABASE_URL unconditionally.
+  // Guarding the wrong one lets a local DATABASE_URL sitting beside a hosted
+  // APP_DATABASE_URL pass the check and then truncate the hosted ledger,
+  // which is exactly the failure this guard exists to prevent.
+  assertResettable(config.APP_DATABASE_URL || config.DATABASE_URL, config.ALLOW_DESTRUCTIVE_RESET)
   await getDb().execute(
     sql`truncate table trace_events, trace_runs, postings, transactions, import_batches, budgets, rules, memories, accounts restart identity cascade`,
   )

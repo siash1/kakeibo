@@ -39,6 +39,7 @@ export {
   type AdminRun,
   type AdminSession,
   type AdminUser,
+  adminGetRun,
   adminOwnerId,
   assertAdmin,
   type BudgetPanel,

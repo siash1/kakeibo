@@ -1,5 +1,5 @@
 import { loadEnv } from '@kakeibo/core'
-import { blockOwner, pauseLiveChat } from '@kakeibo/ledger'
+import { asOwnerId, blockOwner, pauseLiveChat } from '@kakeibo/ledger'
 import { adminSession } from '@/lib/admin'
 
 /**
@@ -31,7 +31,17 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   if (body.action === 'block_owner' && body.ownerId) {
-    await blockOwner(session, body.ownerId, body.blocked === true)
+    // asOwnerId throws on anything that is not a uuid, and `user.id` always
+    // is one — so this is validation, not a scoping check. Without it, a
+    // malformed id reaches `eq(user.id, ownerId)` and Postgres raises 22P02,
+    // which escaped as an unhandled 500 before this caught it.
+    let ownerId: ReturnType<typeof asOwnerId>
+    try {
+      ownerId = asOwnerId(body.ownerId)
+    } catch {
+      return Response.json({ error: 'invalid ownerId' }, { status: 400 })
+    }
+    await blockOwner(session, ownerId, body.blocked === true)
     return Response.json({ ok: true })
   }
 
