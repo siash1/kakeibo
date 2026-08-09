@@ -168,13 +168,28 @@ export async function budgetPanel(_session: AdminSession): Promise<BudgetPanel> 
 
   // One scan, bucketed by day, rather than thirty queries. At ~148 turns a day
   // this stays fast for years, which is why §9.3 rules out rollup tables.
+  //
+  // IS_VISITOR_RUN here too, and for the same reason quota.ts's spendToday()
+  // carries it: that function is what actually trips the global cap this
+  // panel exists to display, and it excludes operator audit rows. Without the
+  // same filter here, the two would read different row sets that only happen
+  // to agree today because an audit row's cost is always zero — a coincidence
+  // of the data, not a property of the code, that breaks the moment an audit
+  // row ever carries a real cost. Task 7b existed because this panel and the
+  // enforcer once disagreed about the *window*; this is the same defect
+  // class, over the *rows*, caught before it shipped instead of after.
   const rows = await db
     .select({
       day: sql<string>`to_char(${traceRuns.startedAt} at time zone 'utc', 'YYYY-MM-DD')`,
       usd: sql<string>`coalesce(sum(${traceRuns.costUsdEst}), 0)`,
     })
     .from(traceRuns)
-    .where(gte(traceRuns.startedAt, sql`${UTC_DAY_START} - ${DAYS - 1} * interval '1 day'`))
+    .where(
+      and(
+        gte(traceRuns.startedAt, sql`${UTC_DAY_START} - ${DAYS - 1} * interval '1 day'`),
+        IS_VISITOR_RUN,
+      ),
+    )
     .groupBy(sql`1`)
 
   const byDay = new Map(rows.map((row) => [row.day, Number(row.usd)]))
@@ -190,10 +205,13 @@ export async function budgetPanel(_session: AdminSession): Promise<BudgetPanel> 
     sparkline.push({ day, usd: byDay.get(day) ?? 0 })
   }
 
+  // Same IS_VISITOR_RUN filter, same reason: month-to-date must agree with
+  // spendToday() about which rows are spend, not just which window they fall
+  // in.
   const [monthRow] = await db
     .select({ usd: sql<string>`coalesce(sum(${traceRuns.costUsdEst}), 0)` })
     .from(traceRuns)
-    .where(gte(traceRuns.startedAt, UTC_MONTH_START))
+    .where(and(gte(traceRuns.startedAt, UTC_MONTH_START), IS_VISITOR_RUN))
 
   const todayUsd = sparkline.at(-1)?.usd ?? 0
   const monthToDateUsd = Number(monthRow?.usd ?? 0)
