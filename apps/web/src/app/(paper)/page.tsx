@@ -448,7 +448,7 @@ export default function LandingPage() {
                 <Link href="/privacy">What is stored, and who can read it</Link>
               </li>
               <li>
-                <Link href="/terms">Terms</Link>
+                <Link href="/terms">The terms, such as they are</Link>
               </li>
             </ul>
           </nav>

@@ -18,7 +18,14 @@ export const metadata = { title: 'Privacy' }
 export default function PrivacyPage() {
   return (
     <div className="max-w-[68ch]">
-      <header className="border-b border-sumi-900 pb-6">
+      {/*
+       * No rule under the header. Every other paper page puts a band of figures
+       * or a margin rail between its header rule and the first section's, and
+       * with a section immediately beneath, two heavy sumi rules stack 56px
+       * apart with nothing between them. The first section's own rule is the
+       * one this page needs.
+       */}
+      <header>
         <h1 className="font-serif text-[clamp(1.75rem,5vw,2.5rem)] leading-[1.1] tracking-[-0.025em]">
           Privacy
         </h1>
@@ -38,22 +45,31 @@ export default function PrivacyPage() {
       </Section>
 
       <Section title="What is stored">
-        <ul className="space-y-3 text-[15px] leading-[1.7] text-sumi-900">
-          <li>Your copy of the ledger, and anything you change in it.</li>
-          <li>
+        {/*
+         * Ruled rows rather than a bulleted list. Tailwind's reset removes the
+         * markers, so five paragraphs with margins between them read as five
+         * paragraphs; a hairline under each is what this system uses to say
+         * "these are entries in one list", and it is the same rule the ledger's
+         * own rows are drawn with.
+         */}
+        <ul className="border-t border-rule text-[15px] leading-[1.7] text-sumi-900">
+          <li className="border-b border-rule py-2.5">
+            Your copy of the ledger, and anything you change in it.
+          </li>
+          <li className="border-b border-rule py-2.5">
             Your conversation with the agent, so a reload picks the thread up rather than starting a
             second one.
           </li>
-          <li>
+          <li className="border-b border-rule py-2.5">
             A trace of every model call and tool call in that conversation — what was asked, which
             tools ran, what they returned, and what it cost.
           </li>
-          <li>
+          <li className="border-b border-rule py-2.5">
             An approximate city-level location derived from your request&rsquo;s IP address, for
             operational analytics. No browser location prompt is ever shown, and nothing about the
             site behaves differently because of it.
           </li>
-          <li>
+          <li className="border-b border-rule py-2.5">
             A salted hash of your IP address, used to count messages per day against the
             site&rsquo;s cost ceiling. The address itself is never written down.
           </li>
@@ -90,10 +106,17 @@ export default function PrivacyPage() {
         <DeleteEverything />
       </Section>
 
-      <footer className="mt-16 border-t border-rule pt-4 text-[12px] leading-[1.5] text-sumi-500">
+      {/*
+       * No rule of its own: the delete control closes with one in every state,
+       * and a second hairline 64px under it is two lines doing one job.
+       */}
+      <footer className="mt-10 text-[12px] leading-[1.5] text-sumi-500">
         The source is public at{' '}
-        <a href="https://github.com/siash1/kakeibo">github.com/siash1/kakeibo</a>, including
-        everything described here.
+        {/* Underlined for the reason /terms records: preflight leaves anchors undecorated. */}
+        <a href="https://github.com/siash1/kakeibo" className="underline">
+          github.com/siash1/kakeibo
+        </a>
+        , including everything described here.
       </footer>
     </div>
   )

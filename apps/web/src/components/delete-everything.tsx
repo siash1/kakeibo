@@ -36,7 +36,14 @@ export function DeleteEverything() {
   if (state === 'done') {
     return (
       <div className="border-y border-rule py-4">
-        <Mark tone="ok">deleted</Mark>
+        {/*
+         * Ink, not the ok tone. DESIGN.md's Nothing-Is-Green-When-It-Is-Fine
+         * rule: a call that worked is ink, and the ok ink is reserved for money
+         * that came back. A green word here would be the first success on the
+         * site to take a colour, and it would cost the failure state below the
+         * contrast that makes it leap off the page.
+         */}
+        <span className="text-[12px] uppercase tracking-[0.08em] text-sumi-500">deleted</span>
         <p className="mt-1 max-w-[68ch] text-[15px] leading-[1.7] text-sumi-900">
           Your ledger, your conversation and your traces are gone, and so is the anonymous account
           that held them. Opening the chat again starts you over with a fresh copy of the synthetic

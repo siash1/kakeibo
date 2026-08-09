@@ -14,7 +14,8 @@ export const metadata = { title: 'Terms' }
 export default function TermsPage() {
   return (
     <div className="max-w-[68ch]">
-      <header className="border-b border-sumi-900 pb-6">
+      {/* No rule under the header — see the note on /privacy. */}
+      <header>
         <h1 className="font-serif text-[clamp(1.75rem,5vw,2.5rem)] leading-[1.1] tracking-[-0.025em]">
           Terms
         </h1>
@@ -39,12 +40,22 @@ export default function TermsPage() {
         </p>
       </Section>
 
+      {/*
+       * The inline link is explicitly underlined. Tailwind's preflight sets
+       * `text-decoration: inherit` on anchors, so the rule in globals.css that
+       * offsets a paper link's underline never has an underline to offset — and
+       * an inline link in sumi-900 prose, on a site with no accent colour, is
+       * otherwise indistinguishable from the sentence around it.
+       */}
       <Section title="Your data">
         <p className="text-[15px] leading-[1.7] text-sumi-900">
           Deleted automatically within 24 hours, or immediately if you ask.{' '}
-          <Link href="/privacy">The privacy page</Link> describes what is stored and who can read it
-          — including the part where the operator can see your ledger contents in a diagnostic
-          trace. Please read it before importing anything real.
+          <Link href="/privacy" className="underline">
+            The privacy page
+          </Link>{' '}
+          describes what is stored and who can read it — including the part where the operator can
+          see your ledger contents in a diagnostic trace. Please read it before importing anything
+          real.
         </p>
       </Section>
 
