@@ -1,7 +1,9 @@
 import { env } from '@kakeibo/core/env'
-import { eq } from 'drizzle-orm'
+import { and, countDistinct, eq, gte, sql } from 'drizzle-orm'
 import { user } from '../auth-schema'
 import { adminDb } from '../db'
+import { traceRuns } from '../schema'
+import { isLiveChatPaused } from './flags'
 
 /**
  * The operator dashboard (spec §9).
@@ -86,4 +88,162 @@ export async function adminOwnerId(session: AdminSession): Promise<string | unde
     .where(eq(user.email, session.email))
     .limit(1)
   return row?.id
+}
+
+const DAYS = 30
+
+/**
+ * "Today", as a UTC calendar date.
+ *
+ * The database's session timezone is not guaranteed to be UTC — it is
+ * whatever the Postgres server was initialised with, which on at least one
+ * developer machine is the host's local zone, not UTC. `sparkline` below
+ * builds its day keys with `Date.prototype.toISOString`, which is always UTC;
+ * bucketing rows with a bare `current_date` would silently misfile the last
+ * few hours of the UTC day into the wrong bucket, or off the end of the
+ * sparkline entirely, whenever the two clocks disagree about what day it is.
+ * Pinning both sides to UTC explicitly removes the dependency on the server's
+ * configured zone.
+ */
+const UTC_TODAY = sql`(now() at time zone 'utc')::date`
+
+export interface BudgetPanel {
+  todayUsd: number
+  monthToDateUsd: number
+  projectedMonthUsd: number
+  dailyCapUsd: number
+  monthlyCeilingUsd: number
+  state: 'ok' | 'tripped' | 'paused'
+  sparkline: { day: string; usd: number }[]
+}
+
+export interface TrafficPanel {
+  visitors: { today: number; d7: number; d30: number }
+  anonymous: number
+  signedIn: number
+  conversionPercent: number
+  returning: number
+}
+
+/**
+ * What the site is costing (spec §9.3), first and largest of the panels: the
+ * $20/month ceiling is on a personal card, and a surprise there is a surprise
+ * on a bill.
+ */
+export async function budgetPanel(_session: AdminSession): Promise<BudgetPanel> {
+  const config = env()
+  const db = unscoped()
+
+  // One scan, bucketed by day, rather than thirty queries. At ~148 turns a day
+  // this stays fast for years, which is why §9.3 rules out rollup tables.
+  const rows = await db
+    .select({
+      day: sql<string>`to_char(${traceRuns.startedAt} at time zone 'utc', 'YYYY-MM-DD')`,
+      usd: sql<string>`coalesce(sum(${traceRuns.costUsdEst}), 0)`,
+    })
+    .from(traceRuns)
+    .where(gte(traceRuns.startedAt, sql`${UTC_TODAY} - ${DAYS - 1} * interval '1 day'`))
+    .groupBy(sql`1`)
+
+  const byDay = new Map(rows.map((row) => [row.day, Number(row.usd)]))
+
+  // Filled, not sparse: a series that skips quiet days compresses the x-axis
+  // and makes a flat month look like steady traffic.
+  const today = new Date()
+  const sparkline: { day: string; usd: number }[] = []
+  for (let back = DAYS - 1; back >= 0; back--) {
+    const date = new Date(today)
+    date.setUTCDate(date.getUTCDate() - back)
+    const day = date.toISOString().slice(0, 10)
+    sparkline.push({ day, usd: byDay.get(day) ?? 0 })
+  }
+
+  const [monthRow] = await db
+    .select({ usd: sql<string>`coalesce(sum(${traceRuns.costUsdEst}), 0)` })
+    .from(traceRuns)
+    .where(gte(traceRuns.startedAt, sql`date_trunc('month', ${UTC_TODAY})`))
+
+  const todayUsd = sparkline.at(-1)?.usd ?? 0
+  const monthToDateUsd = Number(monthRow?.usd ?? 0)
+
+  const dayOfMonth = today.getUTCDate()
+  const daysInMonth = new Date(
+    Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + 1, 0),
+  ).getUTCDate()
+  // Never below month-to-date: a projection that undercuts money already spent
+  // is worse than no projection at all.
+  const projectedMonthUsd = Math.max(monthToDateUsd, (monthToDateUsd / dayOfMonth) * daysInMonth)
+
+  return {
+    todayUsd,
+    monthToDateUsd,
+    projectedMonthUsd,
+    dailyCapUsd: config.GLOBAL_DAILY_BUDGET_USD,
+    monthlyCeilingUsd: config.GLOBAL_DAILY_BUDGET_USD * daysInMonth,
+    state: (await isLiveChatPaused())
+      ? 'paused'
+      : todayUsd >= config.GLOBAL_DAILY_BUDGET_USD
+        ? 'tripped'
+        : 'ok',
+    sparkline,
+  }
+}
+
+/** Who is visiting (spec §9.5): counts, not identities — no IP or user agent leaves `trace_runs`. */
+export async function trafficPanel(_session: AdminSession): Promise<TrafficPanel> {
+  const db = unscoped()
+
+  const active = async (days: number): Promise<number> => {
+    const [row] = await db
+      .select({ n: countDistinct(traceRuns.ownerId) })
+      .from(traceRuns)
+      .where(gte(traceRuns.startedAt, sql`current_date - ${days} * interval '1 day'`))
+    return Number(row?.n ?? 0)
+  }
+
+  // Distinct owners active in the same 30-day window as `visitors.d30`, split
+  // by kind, rather than a raw count of every row in "user". The two have to
+  // agree by construction (`anonymous + signedIn === visitors.d30`): a signed-in
+  // account that never came back would inflate a raw table count without ever
+  // being a visitor, and the same window as `active(DAYS)` is what keeps the
+  // two numbers describing the same set of people.
+  const [kinds] = await db
+    .select({
+      anonymous: sql<string>`count(distinct ${traceRuns.ownerId}) filter (where ${user.isAnonymous} is true)`,
+      signedIn: sql<string>`count(distinct ${traceRuns.ownerId}) filter (where ${user.isAnonymous} is not true)`,
+    })
+    .from(traceRuns)
+    .innerJoin(user, eq(user.id, traceRuns.ownerId))
+    .where(gte(traceRuns.startedAt, sql`current_date - ${DAYS} * interval '1 day'`))
+
+  const anonymous = Number(kinds?.anonymous ?? 0)
+  const signedIn = Number(kinds?.signedIn ?? 0)
+  const total = anonymous + signedIn
+
+  // Distinct owners with a run in the last week whose account predates today:
+  // "active, and was not first seen today." Joined against `user` rather than
+  // counting rows in `user` directly for the same reason as above — the reaper
+  // deletes anonymous visitors after 24 hours (cascading away their runs with
+  // them), so a row that still exists in `trace_runs` always has a live owner
+  // to join against.
+  const [returningRow] = await db
+    .select({ n: countDistinct(traceRuns.ownerId) })
+    .from(traceRuns)
+    .innerJoin(user, eq(user.id, traceRuns.ownerId))
+    .where(
+      and(
+        gte(traceRuns.startedAt, sql`current_date - 7 * interval '1 day'`),
+        sql`${user.createdAt} < current_date`,
+      ),
+    )
+
+  return {
+    visitors: { today: await active(0), d7: await active(7), d30: await active(DAYS) },
+    anonymous,
+    signedIn,
+    // A percentage, not a fraction, and 0 rather than NaN when there is nobody
+    // at all — which is every site on day one.
+    conversionPercent: total === 0 ? 0 : Math.round((signedIn / total) * 1000) / 10,
+    returning: Number(returningRow?.n ?? 0),
+  }
 }

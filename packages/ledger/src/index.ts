@@ -35,7 +35,15 @@ export {
   listAccounts,
   requireAccount,
 } from './repo/accounts'
-export { type AdminSession, adminOwnerId, assertAdmin } from './repo/admin'
+export {
+  type AdminSession,
+  adminOwnerId,
+  assertAdmin,
+  type BudgetPanel,
+  budgetPanel,
+  type TrafficPanel,
+  trafficPanel,
+} from './repo/admin'
 export {
   createConversation,
   latestConversation,
