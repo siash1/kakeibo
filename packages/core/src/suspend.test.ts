@@ -7,9 +7,7 @@ describe('suspend vocabulary', () => {
       runId: '11111111-1111-4111-8111-111111111111',
       history: [],
       completedResults: [],
-      pending: [
-        { id: 'call_0_set_budget', tool: 'set_budget', args: {}, summary: 'set a budget' },
-      ],
+      pending: [{ id: 'call_0_set_budget', tool: 'set_budget', args: {}, summary: 'set a budget' }],
       usage: { inputTokens: 10, outputTokens: 2, cachedTokens: 0, thoughtTokens: 0 },
       costUsdEst: 0.0001,
       iterations: 1,

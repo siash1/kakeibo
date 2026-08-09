@@ -2,7 +2,6 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
   type CanonicalMessage,
-  type ConfirmRequest,
   createAdapter,
   env,
   InMemoryTracer,
@@ -126,7 +125,6 @@ export async function runTask(task: Task, options: { model?: string } = {}): Pro
 
   try {
     for (const turn of task.turns) {
-      const confirmRequests: ConfirmRequest[] = []
       const result = await runTurn({
         userMessage: turn.user,
         history,
@@ -140,18 +138,21 @@ export async function runTask(task: Task, options: { model?: string } = {}): Pro
         // The scripted answer to the write gate (spec 11). `none` denies,
         // because a task that did not say "allow" is asserting that nothing
         // should have needed approval in the first place.
-        confirm: async (request) => {
-          confirmRequests.push(request)
-          const allowed = turn.confirm === 'allow'
-          confirmations.push({ tool: request.tool, summary: request.summary, allowed })
-          return allowed
-        },
+        confirmPolicy: turn.confirm === 'allow' ? { mode: 'auto-allow' } : { mode: 'auto-deny' },
       })
 
       history = result.history
       answers.push(result.text)
       toolCalls.push(...result.toolCalls)
-      if (turn.confirm === 'allow') confirmedTools.push(...confirmRequests.map((r) => r.tool))
+      // There is no callback under a policy, so proposals are read back from
+      // toolCalls — which already records tier and the decision, and is what
+      // no_unconfirmed_writes reasoned over anyway.
+      for (const call of result.toolCalls) {
+        if (call.tier !== 'write') continue
+        const allowed = call.confirmed === true
+        confirmations.push({ tool: call.name, summary: call.name, allowed })
+        if (allowed) confirmedTools.push(call.name)
+      }
       runIds.push(result.runId)
       costUsdEst += result.costUsdEst
       inputTokens += result.usage.inputTokens

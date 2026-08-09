@@ -5,12 +5,13 @@ import { estimateCostUsd, estimateUncachedCostUsd } from './pricing'
 import { SYSTEM_PROMPT, wrapToolData, wrapUserMemory } from './prompt'
 import {
   type Channel,
-  type ConfirmFn,
+  type ConfirmRequest,
   summarizeCall,
   type ToolContext,
   type ToolRegistry,
   truncate,
 } from './registry'
+import type { ConfirmPolicy, PendingConfirmation, ResumeInput, SuspendedState } from './suspend'
 import { clipForTrace, type RunStatus, type TraceRunHandle, type Tracer } from './trace'
 import type {
   CanonicalMessage,
@@ -56,7 +57,10 @@ export interface RunTurnOptions {
   model: string
   summarizerModel: string
   channel: Channel
-  confirm: ConfirmFn
+  /** How this turn answers the write gate (spec §6). */
+  confirmPolicy: ConfirmPolicy
+  /** Present when picking a suspended turn back up. */
+  resume?: ResumeInput
   system?: string
   memory?: MemoryStore
   /** Category names used for memory recall matching. */
@@ -93,7 +97,9 @@ export interface TurnResult {
   /** What the same tokens would have cost with no cache hits — the savings baseline. */
   uncachedCostUsdEst: number
   latencyMs: number
-  status: RunStatus
+  status: RunStatus | 'suspended'
+  /** Present when status is 'suspended': everything needed to resume. */
+  suspended?: SuspendedState
   iterations: number
   toolCalls: ToolCallRecord[]
   /** Set when the turn ended on a block or an error. */
@@ -109,11 +115,14 @@ export async function runTurn(options: RunTurnOptions): Promise<TurnResult> {
   const contextManager = options.contextManager ?? new ContextManager()
   const maxIterations = options.maxIterations ?? MAX_ITERATIONS
 
-  const run = await options.tracer.startRun({
-    provider: options.adapter.name,
-    model: options.model,
-    channel: options.channel,
-  })
+  // Resume reopens the existing run so a suspended turn stays one trace.
+  const run: TraceRunHandle = options.resume
+    ? await options.tracer.resumeRun(options.resume.state.runId)
+    : await options.tracer.startRun({
+        provider: options.adapter.name,
+        model: options.model,
+        channel: options.channel,
+      })
 
   const totals: Usage = { inputTokens: 0, outputTokens: 0, cachedTokens: 0, thoughtTokens: 0 }
   const toolCalls: ToolCallRecord[] = []
@@ -121,45 +130,117 @@ export async function runTurn(options: RunTurnOptions): Promise<TurnResult> {
   let costUsdEst = 0
   let uncachedCostUsdEst = 0
   let evictions = 0
-  let status: RunStatus = 'ok'
+  let status: RunStatus | 'suspended' = 'ok'
   let errorMessage: string | undefined
   let finalText = ''
 
-  // 1. Append the user message, with recalled memories riding on the same turn.
-  //    Memories go *after* the stable prefix, never inside the system
-  //    instruction, so injecting them cannot invalidate the cache (spec 8.4).
-  const userBlocks: ContentBlock[] = [{ type: 'text', text: options.userMessage }]
-  if (options.memory) {
-    const recalled = await recallMemories(options.memory, {
-      question: options.userMessage,
-      knownCategories: options.knownCategories ?? [],
-    })
-    if (recalled.length > 0) {
-      userBlocks.push({ type: 'text', text: wrapUserMemory(recalled.map((m) => m.content)) })
-    }
-  }
-
-  let history: CanonicalMessage[] = [...options.history, { role: 'user', content: userBlocks }]
-
-  // 2. Fit the window before the first call of the turn.
-  const fit = await contextManager.fit(history, {
-    system,
-    tools,
-    adapter: options.adapter,
-    model: options.model,
-    summarizerModel: options.summarizerModel,
-    trace: run,
-    ...(options.budgetTokens !== undefined ? { budgetTokens: options.budgetTokens } : {}),
-    ...(options.signal ? { signal: options.signal } : {}),
-  })
-  history = fit.messages
-  if (fit.evicted) evictions++
-
-  // Explicit context cache over the stable prefix (system + tools), if the
-  // adapter supports one and the prefix is big enough to qualify (spec 5.5).
-  const cacheRef = (await options.adapter.ensureCache?.(options.model, system, tools)) ?? undefined
-
+  let history: CanonicalMessage[] = []
   let iterations = 0
+  let cacheRef: string | undefined
+
+  if (options.resume) {
+    const { state, decisions } = options.resume
+
+    // Seed the totals from before the pause. Starting at zero would hide the
+    // model calls that led to the confirmation from both the trace and the
+    // budget cap — and turns involving a confirmation are the expensive ones.
+    Object.assign(totals, state.usage)
+    costUsdEst = state.costUsdEst
+    iterations = state.iterations
+    history = state.history
+
+    const byId = new Map(decisions.map((d) => [d.id, d.allowed]))
+    const writeResults: ToolResultBlock[] = []
+
+    for (const item of state.pending) {
+      const allowed = byId.get(item.id) === true
+      await run.event({
+        type: 'confirm',
+        payload: { ...item, args: clipForTrace(item.args), allowed },
+      })
+
+      if (!allowed) {
+        writeResults.push({
+          type: 'tool_result',
+          tool_use_id: item.id,
+          name: item.tool,
+          content: 'User declined. Do not retry without new instruction.',
+        })
+        toolCalls.push({
+          id: item.id,
+          name: item.tool,
+          args: item.args,
+          tier: 'write',
+          isError: false,
+          confirmed: false,
+          latencyMs: 0,
+          result: 'User declined. Do not retry without new instruction.',
+        })
+        continue
+      }
+
+      writeResults.push(
+        await executeToolUse(
+          { type: 'tool_use', id: item.id, name: item.tool, input: item.args },
+          options,
+          run,
+          toolCalls,
+          true,
+        ),
+      )
+    }
+
+    // Reassemble in the model's original call order. The provider pairs
+    // responses positionally when ids are absent, so ordering is correctness
+    // rather than cosmetics.
+    const order = new Map<string, number>()
+    const lastAssistant = history[history.length - 1]
+    for (const [index, block] of (lastAssistant?.content ?? []).entries()) {
+      if (block.type === 'tool_use') order.set(block.id, index)
+    }
+    const merged = [...state.completedResults, ...writeResults].sort(
+      (a, b) => (order.get(a.tool_use_id) ?? 0) - (order.get(b.tool_use_id) ?? 0),
+    )
+
+    history = [...history, { role: 'user', content: merged }]
+  } else {
+    // On resume none of this applies: the user message was appended on the
+    // suspended turn, the window was already fitted, and re-fitting could evict
+    // the very assistant turn whose tool calls we are about to answer.
+    // 1. Append the user message, with recalled memories riding on the same turn.
+    //    Memories go *after* the stable prefix, never inside the system
+    //    instruction, so injecting them cannot invalidate the cache (spec 8.4).
+    const userBlocks: ContentBlock[] = [{ type: 'text', text: options.userMessage }]
+    if (options.memory) {
+      const recalled = await recallMemories(options.memory, {
+        question: options.userMessage,
+        knownCategories: options.knownCategories ?? [],
+      })
+      if (recalled.length > 0) {
+        userBlocks.push({ type: 'text', text: wrapUserMemory(recalled.map((m) => m.content)) })
+      }
+    }
+
+    history = [...options.history, { role: 'user', content: userBlocks }]
+
+    // 2. Fit the window before the first call of the turn.
+    const fit = await contextManager.fit(history, {
+      system,
+      tools,
+      adapter: options.adapter,
+      model: options.model,
+      summarizerModel: options.summarizerModel,
+      trace: run,
+      ...(options.budgetTokens !== undefined ? { budgetTokens: options.budgetTokens } : {}),
+      ...(options.signal ? { signal: options.signal } : {}),
+    })
+    history = fit.messages
+    if (fit.evicted) evictions++
+
+    // Explicit context cache over the stable prefix (system + tools), if the
+    // adapter supports one and the prefix is big enough to qualify (spec 5.5).
+    cacheRef = (await options.adapter.ensureCache?.(options.model, system, tools)) ?? undefined
+  }
 
   // 4. LOOP
   for (;;) {
@@ -298,9 +379,64 @@ export async function runTurn(options: RunTurnOptions): Promise<TurnResult> {
       break
     }
 
-    // g. Execute every call in parallel. Each one resolves to a tool_result —
-    //    success, validation failure, denial or thrown error alike. Nothing
-    //    throws past this point.
+    // g. Execute the batch.
+    //
+    //    Under a suspend policy a batch containing any write stops the turn.
+    //    It cannot be answered piecemeal: the provider requires the number of
+    //    functionResponse parts to equal the number of functionCall parts, so
+    //    all writes in a batch suspend together. Reads in the same batch run
+    //    now and their results are carried, rather than re-run on resume where
+    //    the data could have shifted underneath the decision.
+    if (options.confirmPolicy.mode === 'suspend') {
+      const writes = toolUses.filter((use) => options.registry.get(use.name)?.tier === 'write')
+
+      if (writes.length > 0) {
+        const reads = toolUses.filter((use) => !writes.includes(use))
+        const completedResults = await Promise.all(
+          reads.map((use) => executeToolUse(use, options, run, toolCalls, true)),
+        )
+
+        const pending: PendingConfirmation[] = writes.map((use) => {
+          const spec = options.registry.get(use.name)!
+          const parsed = spec.input.safeParse(use.input)
+          const args = parsed.success ? parsed.data : use.input
+          return { id: use.id, tool: use.name, args, summary: summarizeCall(spec, args) }
+        })
+
+        for (const item of pending) {
+          await run.event({
+            type: 'confirm',
+            payload: { ...item, args: clipForTrace(item.args), allowed: null, suspended: true },
+          })
+        }
+
+        const latencyMs = Date.now() - started
+        return {
+          runId: run.id,
+          text: textOf(result.message.content),
+          history,
+          usage: totals,
+          costUsdEst,
+          uncachedCostUsdEst,
+          latencyMs,
+          status: 'suspended',
+          suspended: {
+            runId: run.id,
+            history,
+            completedResults,
+            pending,
+            usage: { ...totals },
+            costUsdEst,
+            iterations,
+          },
+          iterations,
+          toolCalls,
+          evictions,
+          thoughtSummaries,
+        }
+      }
+    }
+
     const results = await Promise.all(
       toolUses.map((use) => executeToolUse(use, options, run, toolCalls)),
     )
@@ -334,6 +470,11 @@ async function executeToolUse(
   options: RunTurnOptions,
   run: TraceRunHandle,
   record: ToolCallRecord[],
+  /**
+   * True when the caller has already ruled on this call: a read (which never
+   * confirms) executed on the suspend path, or an approved write on resume.
+   */
+  skipConfirmation = false,
 ): Promise<ToolResultBlock> {
   const started = Date.now()
   const spec = options.registry.get(use.name)
@@ -412,7 +553,7 @@ async function executeToolUse(
       args: parsed.data,
       summary: summarizeCall(spec, parsed.data),
     }
-    confirmed = await options.confirm(request)
+    confirmed = skipConfirmation ? true : await decideByPolicy(options.confirmPolicy, request)
     await run.event({
       type: 'confirm',
       latencyMs: Date.now() - started,
@@ -425,7 +566,7 @@ async function executeToolUse(
 
   const ctx: ToolContext = {
     channel: options.channel,
-    confirm: options.confirm,
+    confirm: async () => decideByPolicy(options.confirmPolicy),
     ...(options.signal ? { signal: options.signal } : {}),
   }
 
@@ -455,6 +596,24 @@ async function executeToolUse(
       payload: { name: use.name, args: clipForTrace(parsed.data), error: message },
     })
     return emit(`Tool ${use.name} failed: ${message}`, true, confirmed)
+  }
+}
+
+/**
+ * Applies the confirmation policy.
+ *
+ * 'suspend' returns false as a safety net only: the suspend branch in the loop
+ * returns before any write reaches here, so this is unreachable in practice and
+ * denying is the only safe reading if it ever is reached.
+ */
+async function decideByPolicy(policy: ConfirmPolicy, request?: ConfirmRequest): Promise<boolean> {
+  switch (policy.mode) {
+    case 'inline':
+      return request ? policy.confirm(request) : false
+    case 'auto-allow':
+      return true
+    default:
+      return false
   }
 }
 

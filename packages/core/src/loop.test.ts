@@ -70,7 +70,7 @@ describe('runTurn', () => {
       adapter,
       registry: registryWith(echoTool as unknown as ToolSpec<never>),
       tracer: new InMemoryTracer(),
-      confirm: allow,
+      confirmPolicy: { mode: 'auto-allow' },
     })
 
     expect(result.text).toBe('You spent ₹100.')
@@ -93,7 +93,7 @@ describe('runTurn', () => {
       adapter,
       registry: registryWith(strictTool as unknown as ToolSpec<never>),
       tracer,
-      confirm: allow,
+      confirmPolicy: { mode: 'auto-allow' },
     })
 
     // The bad call came back as an error result, not an exception.
@@ -122,7 +122,7 @@ describe('runTurn', () => {
       adapter,
       registry: registryWith(echoTool as unknown as ToolSpec<never>),
       tracer: new InMemoryTracer(),
-      confirm: allow,
+      confirmPolicy: { mode: 'auto-allow' },
     })
 
     const results = toolResultsOf(adapter.requests[1]?.messages.at(-1))
@@ -142,7 +142,7 @@ describe('runTurn', () => {
       adapter,
       registry: registryWith(explodingTool as unknown as ToolSpec<never>),
       tracer: new InMemoryTracer(),
-      confirm: allow,
+      confirmPolicy: { mode: 'auto-allow' },
     })
 
     const results = toolResultsOf(adapter.requests[1]?.messages.at(-1))
@@ -169,7 +169,7 @@ describe('runTurn', () => {
       adapter,
       registry: registryWith(echoTool as unknown as ToolSpec<never>),
       tracer: new InMemoryTracer(),
-      confirm: allow,
+      confirmPolicy: { mode: 'auto-allow' },
     })
 
     const lastMessage = adapter.requests[1]?.messages.at(-1)
@@ -195,9 +195,12 @@ describe('runTurn', () => {
       adapter,
       registry: registryWith(writeTool as unknown as ToolSpec<never>),
       tracer,
-      confirm: async (request) => {
-        seen.push(request)
-        return false
+      confirmPolicy: {
+        mode: 'inline',
+        confirm: async (request) => {
+          seen.push(request)
+          return false
+        },
       },
     })
 
@@ -224,9 +227,12 @@ describe('runTurn', () => {
       adapter,
       registry: registryWith(echoTool as unknown as ToolSpec<never>),
       tracer: new InMemoryTracer(),
-      confirm: async () => {
-        confirmCalls++
-        return true
+      confirmPolicy: {
+        mode: 'inline',
+        confirm: async () => {
+          confirmCalls++
+          return true
+        },
       },
     })
 
@@ -251,7 +257,7 @@ describe('runTurn', () => {
       adapter,
       registry: registryWith(echoTool as unknown as ToolSpec<never>),
       tracer,
-      confirm: allow,
+      confirmPolicy: { mode: 'auto-allow' },
       maxIterations: 12,
     })
 
@@ -283,7 +289,7 @@ describe('runTurn', () => {
       adapter,
       registry: registryWith(echoTool as unknown as ToolSpec<never>),
       tracer,
-      confirm: allow,
+      confirmPolicy: { mode: 'auto-allow' },
     })
 
     expect(result.status).toBe('blocked')
@@ -302,7 +308,7 @@ describe('runTurn', () => {
       adapter,
       registry: registryWith(echoTool as unknown as ToolSpec<never>),
       tracer: new InMemoryTracer(),
-      confirm: allow,
+      confirmPolicy: { mode: 'auto-allow' },
     })
 
     expect(result.status).toBe('error')
@@ -321,7 +327,7 @@ describe('runTurn', () => {
       adapter,
       registry: registryWith(echoTool as unknown as ToolSpec<never>),
       tracer: new InMemoryTracer(),
-      confirm: allow,
+      confirmPolicy: { mode: 'auto-allow' },
     })
 
     const results = toolResultsOf(adapter.requests[1]?.messages.at(-1))
@@ -348,7 +354,7 @@ describe('runTurn', () => {
       adapter,
       registry: registryWith(echoTool as unknown as ToolSpec<never>),
       tracer,
-      confirm: allow,
+      confirmPolicy: { mode: 'auto-allow' },
     })
 
     expect(tracer.eventsOfType('model_call')).toHaveLength(2)
@@ -368,7 +374,7 @@ describe('runTurn', () => {
       adapter,
       registry: registryWith(echoTool as unknown as ToolSpec<never>),
       tracer: new InMemoryTracer(),
-      confirm: allow,
+      confirmPolicy: { mode: 'auto-allow' },
       signal: controller.signal,
     })
 
@@ -384,7 +390,7 @@ describe('runTurn', () => {
       adapter: first,
       registry: registryWith(echoTool as unknown as ToolSpec<never>),
       tracer: new InMemoryTracer(),
-      confirm: deny,
+      confirmPolicy: { mode: 'auto-deny' },
     })
 
     const second = new ScriptedAdapter([{ content: [textBlock('Second answer.')] }])
@@ -395,7 +401,7 @@ describe('runTurn', () => {
       adapter: second,
       registry: registryWith(echoTool as unknown as ToolSpec<never>),
       tracer: new InMemoryTracer(),
-      confirm: deny,
+      confirmPolicy: { mode: 'auto-deny' },
     })
 
     const sent = second.requests[0]?.messages ?? []
