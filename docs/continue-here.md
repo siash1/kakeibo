@@ -242,6 +242,25 @@ for: `/writing-plans` for Plan D, `/using-git-worktrees` to isolate,
   nothing in the app makes an authorization, quota or ledger decision off of
   them, only the map renders a dot.
 
+## Known and deliberately left
+
+One real gap, triaged during Plan C's final review and left rather than fixed,
+because closing it belongs with the suite it belongs to rather than with an
+operator dashboard:
+
+**`listRuns`, `getRun` and `cacheStats` are not in
+`packages/ledger/src/isolation.test.ts`.** CLAUDE.md rule 7 says every
+repository read goes in that table, and these three predate the rule. They *are*
+correctly owner-scoped in code — each takes `OwnerId` and filters on it — so
+this is missing proof rather than a known leak, and the second, RLS-bypassed
+pass is exactly the thing that would catch it if that ever stopped being true.
+Add them next time that file is opened.
+
+Not gaps, for the avoidance of a second look: `adminGetRun` and everything else
+in `packages/ledger/src/repo/admin.ts` are deliberately absent from the
+isolation suite. They read across owners on purpose, which is what
+`packages/ledger/src/admin-containment.test.ts` exists to bound instead.
+
 ## What needs the owner, not the agent
 
 **Google OAuth credentials.** Email/password and anonymous sign-in work with no
