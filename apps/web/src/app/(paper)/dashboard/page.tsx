@@ -83,7 +83,7 @@ export default async function DashboardPage({
           this page fills in.
         </p>
         <a
-          href="/"
+          href="/chat"
           className="mt-8 inline-block border-b border-sumi-900 pb-0.5 font-serif text-[16px] no-underline"
         >
           Ask about your ledger →
@@ -113,7 +113,19 @@ export default async function DashboardPage({
     (row): row is typeof row & { budgetMinor: number; percentUsed: number } =>
       row.budgetMinor !== null && row.percentUsed !== null,
   )
-  const monthlySubscriptions = recurring.filter((row) => row.cadence === 'monthly')
+  /*
+   * Expenses only, for the same reason "Where it went" says so out loud.
+   *
+   * `detectRecurring` finds anything billing on a cadence, and salary and
+   * interest are exactly that. Income postings are negative, so summing every
+   * monthly merchant reported the subscriptions figure as -₹1,50,472.03 — a
+   * salary drowning nine real subscriptions — under a label that says
+   * "Monthly subscriptions". It rendered without erroring and was wrong on
+   * every month, which is why nobody caught it until the page was looked at.
+   */
+  const monthlySubscriptions = recurring.filter(
+    (row) => row.cadence === 'monthly' && row.averageAmountMinor > 0,
+  )
   const subscriptionTotal = monthlySubscriptions.reduce(
     (sum, row) => sum + row.averageAmountMinor,
     0,
@@ -212,7 +224,7 @@ export default async function DashboardPage({
 
       <Section
         title="Recurring"
-        note="Grouped by merchant with reference numbers stripped, so NETFLIX.COM 4429183 and NETFLIX.COM 5510022 count as one subscription rather than two."
+        note="Grouped by merchant with reference numbers stripped, so NETFLIX.COM 4429183 and NETFLIX.COM 5510022 count as one subscription rather than two. Money arriving on a cadence — salary, interest — is recurring too, and shows here as a negative."
       >
         {recurring.length === 0 ? (
           <Empty
@@ -222,13 +234,28 @@ export default async function DashboardPage({
         ) : (
           <div className="border-t border-rule-strong">
             {recurring.map((row) => (
+              /*
+               * The merchant takes the width, and the constants move under it.
+               *
+               * With four columns on one line at 390px the fixed ones ate 282
+               * of them and the merchant was left 24 to 57 pixels: SALARY
+               * CREDIT ACME and both CULT FIT rows all rendered as "CULT …",
+               * indistinguishable from each other. `monthly` and `6×` repeat on
+               * nearly every row, so they are the cheapest thing on the line to
+               * demote and the merchant is the only thing here worth reading.
+               */
               <Row
                 key={row.merchant}
-                className="grid-cols-[1fr_7rem_5rem_auto] sm:grid-cols-[1fr_9rem_6rem_auto]"
+                className="grid-cols-[minmax(0,1fr)_auto] sm:grid-cols-[1fr_9rem_6rem_auto]"
               >
-                <div className="truncate text-[13px] text-sumi-900">{row.merchant}</div>
-                <div className="text-[12px] text-sumi-600">{row.cadence}</div>
-                <div className="num text-[12px] text-sumi-500">{row.occurrences}×</div>
+                <div className="min-w-0 truncate text-[13px] text-sumi-900">{row.merchant}</div>
+                <div className="order-last col-span-2 text-[12px] text-sumi-600 sm:order-none sm:col-span-1">
+                  {row.cadence}
+                  <span className="num ml-2 text-sumi-500 sm:hidden">{row.occurrences}×</span>
+                </div>
+                <div className="num hidden text-[12px] text-sumi-500 sm:block">
+                  {row.occurrences}×
+                </div>
                 <div className="num text-right text-[13px] text-sumi-900">
                   {formatMinor(row.averageAmountMinor)}
                 </div>
@@ -250,16 +277,32 @@ export default async function DashboardPage({
         ) : (
           <div className="border-t border-rule-strong">
             {anomalies.map((row) => (
-              <Row key={row.transactionId} className="grid-cols-[5.5rem_1fr_6rem_auto]">
-                <div className="num text-[12px] text-sumi-500">{row.date.slice(5)}</div>
-                <div className="min-w-0">
-                  <div className="truncate text-[13px] text-sumi-900">{row.description}</div>
+              /*
+               * Same crush as Recurring, and every cell placed explicitly.
+               *
+               * An earlier pass reflowed this with `order` utilities and left
+               * the amount right-aligned inside the *first* column rather than
+               * to the row rule — stranded mid-row, hanging on none of the
+               * figure columns every other amount on the page uses. On a phone
+               * the two figures share the first line (date left, amount right,
+               * on the rule), the description takes the second, and the kind
+               * sits under it.
+               */
+              <Row
+                key={row.transactionId}
+                className="grid-cols-[minmax(0,1fr)_auto] sm:grid-cols-[5.5rem_1fr_6rem_auto]"
+              >
+                <div className="num col-start-1 row-start-1 text-[12px] text-sumi-500 sm:row-auto">
+                  {row.date.slice(5)}
+                </div>
+                <div className="col-span-2 col-start-1 row-start-2 min-w-0 sm:col-span-1 sm:col-start-2 sm:row-start-1">
+                  <div className="text-[13px] text-sumi-900">{row.description}</div>
                   <div className="mt-0.5 text-[12px] text-sumi-600">{row.detail}</div>
                 </div>
-                <div>
+                <div className="col-span-2 col-start-1 row-start-3 sm:col-span-1 sm:col-start-3 sm:row-start-1">
                   <Mark tone={row.kind === 'refund' ? 'ok' : 'warn'}>{row.kind}</Mark>
                 </div>
-                <div className="num text-right text-[13px] text-sumi-900">
+                <div className="num col-start-2 row-start-1 text-right text-[13px] text-sumi-900 sm:col-start-4">
                   {formatMinor(row.amountMinor)}
                 </div>
               </Row>
