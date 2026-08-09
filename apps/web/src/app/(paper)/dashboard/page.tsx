@@ -297,7 +297,19 @@ export default async function DashboardPage({
                 </div>
                 <div className="col-span-2 col-start-1 row-start-2 min-w-0 sm:col-span-1 sm:col-start-2 sm:row-start-1">
                   <div className="text-[13px] text-sumi-900">{row.description}</div>
-                  <div className="mt-0.5 text-[12px] text-sumi-600">{row.detail}</div>
+                  {/*
+                   * Composed here, from `sigma` and `meanMinor`, rather than
+                   * printing `row.detail`. The detail sentence is written for
+                   * the model and names its units in paise — "mean of 228207
+                   * minor units" — which is right on the wire and wrong in
+                   * front of a person. Money is formatted at the display
+                   * boundary, and this is the boundary.
+                   */}
+                  <div className="mt-0.5 text-[12px] text-sumi-600">
+                    {row.sigma !== undefined && row.meanMinor !== undefined
+                      ? `${row.sigma.toFixed(1)}σ ${row.kind === 'refund' ? 'below' : 'above'} the ${row.category} six-month mean of ${formatMinor(row.meanMinor)}`
+                      : row.detail}
+                  </div>
                 </div>
                 <div className="col-span-2 col-start-1 row-start-3 sm:col-span-1 sm:col-start-3 sm:row-start-1">
                   <Mark tone={row.kind === 'refund' ? 'ok' : 'warn'}>{row.kind}</Mark>

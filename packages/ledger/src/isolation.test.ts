@@ -21,6 +21,7 @@ import {
   monthToPeriod,
   spendReport,
 } from './repo/reports'
+import { cacheStats, DbTracer, getRun, listRuns } from './repo/tracer'
 import { searchTransactions } from './repo/transactions'
 import { listBudgets, listRules } from './repo/writes'
 import { generateSeedData } from './seed/generate'
@@ -75,6 +76,7 @@ async function seedLedger(owner: OwnerId): Promise<void> {
 /** Alice's, so Bob can be asked for them by id and must still get nothing. */
 let aliceConversation = ''
 let aliceSuspendedTurn = ''
+let aliceRun = ''
 
 beforeAll(async () => {
   await resetOwners(alice, bob)
@@ -93,6 +95,29 @@ beforeAll(async () => {
     usage: { inputTokens: 10, outputTokens: 2, cachedTokens: 0, thoughtTokens: 0 },
     costUsdEst: 0.0001,
     iterations: 1,
+  })
+
+  /*
+   * One finished, traced run of Alice's.
+   *
+   * A trace is the most sensitive thing an owner has that is not the ledger
+   * itself: design spec §9.6 notes that trace payloads carry tool arguments and
+   * results, so reading someone's trace is reading their ledger contents by
+   * another route. The tokens are non-zero so `cacheStats` has something real to
+   * report and Bob's zeroes mean "none of Alice's" rather than "no data yet".
+   */
+  const run = await new DbTracer(alice).startRun({
+    provider: 'gemini',
+    model: 'test',
+    channel: 'web',
+  })
+  aliceRun = run.id
+  await run.event({ type: 'tool_call', payload: { name: 'search_transactions' } })
+  await run.finish({
+    status: 'ok',
+    usage: { inputTokens: 1000, outputTokens: 100, cachedTokens: 800, thoughtTokens: 0 },
+    costUsdEst: 0.001,
+    latencyMs: 1200,
   })
 
   // Bob gets accounts but NO transactions. Every read below must therefore
@@ -121,6 +146,7 @@ describe('cross-tenant isolation', () => {
     // Given Alice's conversation id outright. Guessing an id is not the threat
     // model — being handed one is.
     ['loadHistory', (o) => loadHistory(o, aliceConversation)],
+    ['listRuns', (o) => listRuns(o)],
   ]
 
   for (const [name, read] of emptyForBob) {
@@ -140,6 +166,30 @@ describe('cross-tenant isolation', () => {
     // ledger, not merely reading it.
     expect(await takeSuspendedTurn(bob, aliceSuspendedTurn)).toBeUndefined()
     expect(await takeSuspendedTurn(alice, aliceSuspendedTurn)).toBeDefined()
+  })
+
+  it('does not hand Bob the trace of Alice, even given its id', async () => {
+    // Handed the id outright, as with the conversation above. `getRun`
+    // returning undefined rather than throwing is what lets the trace viewer
+    // 404 instead of confirming that the run exists at all.
+    expect(await getRun(bob, aliceRun)).toBeUndefined()
+    expect((await getRun(alice, aliceRun))?.run.id).toBe(aliceRun)
+  })
+
+  it('does not count runs of Alice in the cache statistics of Bob', async () => {
+    // An aggregate leaks differently from a row: nothing of Alice's is shown,
+    // but an unscoped SUM would still tell Bob how much traffic the site has.
+    expect(await cacheStats(bob)).toEqual({
+      runs: 0,
+      inputTokens: 0,
+      cachedTokens: 0,
+      savingsPercent: 0,
+    })
+
+    const mine = await cacheStats(alice)
+    expect(mine.runs).toBe(1)
+    expect(mine.inputTokens).toBe(1000)
+    expect(mine.cachedTokens).toBe(800)
   })
 
   it('gives Bob his own accounts but with zero balances', async () => {

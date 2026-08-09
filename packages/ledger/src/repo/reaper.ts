@@ -49,9 +49,32 @@ export async function reap(options: { anonymousTtlMs?: number } = {}): Promise<R
     .where(lt(suspendedTurns.expiresAt, new Date()))
     .returning({ id: suspendedTurns.id })
 
+  /*
+   * The UTC date, not `current_date` — CLAUDE.md rule 11, and the one place
+   * Plan C's sweep of this bug missed.
+   *
+   * `quota.ts` writes `window_start` from `today()`, which is
+   * `new Date().toISOString().slice(0, 10)` and therefore always the UTC day.
+   * This delete compared it against a bare `current_date`, which Postgres
+   * evaluates in the *session* timezone — `Asia/Kolkata` on the development
+   * machine. For the 5.5 hours between local midnight and UTC midnight the two
+   * disagree by a day, so a counter written today (UTC) sorts as "before
+   * today" (local) and the sweep deletes it.
+   *
+   * The effect was not a stale row left behind, which is the harmless
+   * direction: it was every per-IP counter for the current UTC day being wiped
+   * at local midnight, handing the whole IPv4 space a fresh daily allowance
+   * 5.5 hours early. `reaper.test.ts` has always asserted this correctly and
+   * only fails inside that window, which is why it stayed green until a run
+   * happened to cross it.
+   *
+   * A third definition rather than an import: `admin.ts` and `quota.ts` each
+   * pin midnight UTC as a `timestamptz` instant, and `window_start` is a bare
+   * `date`, so the expression is genuinely different rather than duplicated.
+   */
   const limits = await db
     .delete(rateLimits)
-    .where(lt(rateLimits.windowStart, sql`current_date`))
+    .where(lt(rateLimits.windowStart, sql`(now() at time zone 'utc')::date`))
     .returning({ key: rateLimits.key })
 
   return {

@@ -91,7 +91,17 @@ async function runOn(owner: OwnerId, daysAgo: number, costUsd: number): Promise<
       channel: 'web',
       status: 'ok',
       costUsdEst: costUsd.toFixed(6),
-      startedAt: sql`current_date - ${daysAgo} * interval '1 day' + interval '9 hours'`,
+      /*
+       * Anchored to midnight UTC, like the panels that read it.
+       *
+       * `budgetPanel` buckets by UTC day (rule 11). Seeding from a bare
+       * `current_date` put "0 days ago" on the session-local day, which for the
+       * 5.5 hours between local midnight and UTC midnight is *tomorrow* in UTC
+       * — so the fixture landed on a day the panel does not report and every
+       * "today" assertion in this file read zero. The bug was in the fixture,
+       * not the panel; the assertions are unchanged.
+       */
+      startedAt: sql`(((now() at time zone 'utc')::date)::timestamp at time zone 'utc') - ${daysAgo} * interval '1 day' + interval '9 hours'`,
     })
 }
 

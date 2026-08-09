@@ -270,6 +270,22 @@ export interface Anomaly {
   category: string
   kind: 'outlier' | 'duplicate' | 'refund'
   detail: string
+  /**
+   * The comparison behind an outlier or refund, as numbers rather than prose.
+   *
+   * `detail` is a sentence written for the model, and it names its units the way
+   * every tool result does — "mean of 228207 minor units". That is correct on
+   * the wire and wrong in front of a person, who should be reading ₹2,282.07.
+   * A UI cannot fix it by editing the sentence, so the sentence stays exactly as
+   * it is and the same facts travel beside it in a form the display boundary can
+   * format.
+   *
+   * Deliberately not added to the `flag_anomalies` tool result: that handler
+   * projects its fields one by one, so nothing here reaches the model, the
+   * transcript, or the recorded fixtures that hash over them.
+   */
+  sigma?: number
+  meanMinor?: number
 }
 
 /**
@@ -354,6 +370,8 @@ export async function flagAnomalies(owner: OwnerId, month: string): Promise<Anom
         // A negative posting on an expense account is money coming back.
         kind: belowMean ? 'refund' : 'outlier',
         detail: `${Math.abs(z).toFixed(1)}σ ${belowMean ? 'below' : 'above'} the ${row.category} trailing-6-month mean of ${Math.round(mean)} minor units`,
+        sigma: Math.abs(z),
+        meanMinor: Math.round(mean),
       })
     }
   }

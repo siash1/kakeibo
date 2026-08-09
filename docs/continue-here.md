@@ -53,8 +53,8 @@ Plan D has not been written.**
 ### In flight: Phase 2, branch `ui-overhaul`
 
 Worktree at `.worktrees/ui-overhaul`, **not pushed, not merged.** The gate is
-green on it: `pnpm lint`, `pnpm typecheck`, **233 tests across 30 files plus the
-12-test second isolation pass**, `pnpm --filter @kakeibo/web build`, and
+green on it: `pnpm lint`, `pnpm typecheck`, **236 tests across 30 files plus the
+15-test second isolation pass**, `pnpm --filter @kakeibo/web build`, and
 `pnpm injection:report` still at a 100% block rate.
 
 The owner picked the direction in two structured rounds; these are decided and
@@ -69,7 +69,7 @@ not to be re-opened:
 | Machinery on `/chat` | **A ledger margin rail** — answer as prose, tool calls and cost posting beside it |
 | `/chat` empty state | **A ruled question list** of real questions in the book's voice |
 
-**What the branch contains**, in two commits plus this one:
+**What the branch contains**, across four commits:
 
 - `apps/web/src/app/globals.css` — two palettes in one file. A `paper`/`sumi`
   ramp at hue ~85 for the product genre, the incumbent cool `ink` ramp kept
@@ -111,19 +111,31 @@ not to be re-opened:
   the extractor that picks the recorded exchange the landing replays. Both
   pages read the same file on purpose: a landing quoting a pass rate the eval
   report disagrees with is worse than a landing with no pass rate on it.
+- `apps/web/src/app/opengraph-image.jpg`, `icon.png`, `apple-icon.png` — the
+  link-preview card and the favicons, as Next file conventions so the tags and
+  their dimensions come off the files rather than from hand-written metadata.
+  The icons are the mark rendered from its own SVG, not redrawn.
 - Two self-hosted faces via `@fontsource-variable`: **Source Serif 4** display,
   **Public Sans** body. Both were chosen partly for *not* being on the design
   skill's banned list of training-data defaults; if you swap them, check that
   list first.
 
-**The landing has no generated imagery, and that was a decision.** The launch
-prompt names Vertex Imagen 4 Ultra for it. What the page actually needed was
-proof, and the honest proof was already in the repo: a real turn from the last
-eval run — its question, the tools it called, the answer it gave, the gate it
-stopped at, and what it cost — replayed in the same components the live page
-uses. A generated hero above that would have been the only untrue thing on the
-page. If you want brand imagery later, the mark is vector and the space is
-there; do not put a decorative photograph above the recorded exchange.
+**No page carries a generated image, and that was a decision.** The launch
+prompt names Vertex Imagen 4 Ultra for the landing. What that page actually
+needed was proof, and the proof was already in the repo: a real turn from the
+last eval run — its question, the tools it called, the answer it gave, the gate
+it stopped at, and what it cost — replayed in the same components the live page
+uses. A generated hero above that would have been the only untrue thing on it.
+
+Imagen earned its place somewhere else: `apps/web/src/app/opengraph-image.jpg`,
+the link preview, which PRODUCT.md implies is the first impression the site gets
+to make and which had no design on it at all. The plate is a generated sheet of
+ledger paper; every glyph on it is composited by the browser in the real Source
+Serif 4. **Generate material, never lettering** — a model rendering type gets
+letterforms almost right, and almost right on a wordmark is worse than no image.
+The generator is a scratchpad script, per the launch prompt; only the finished
+asset is in git. Its four figures are the measured ones, so `pnpm eval` changing
+them means regenerating the card.
 
 ### Not started: Plan D
 
@@ -365,6 +377,19 @@ habits worth keeping:
   define their own `UTC_DAY_START` constant that pins midnight UTC as a
   `timestamptz` instant; the duplication is deliberate (see rule 11 in
   `CLAUDE.md`).
+- **The reaper was the one place Plan C's UTC sweep missed, and it was a live
+  bug.** `quota.ts` writes `rate_limits.window_start` from `today()`, which is
+  always the UTC day; `reaper.ts` deleted anything `< current_date`, which is
+  the *session* timezone's day. For the 5.5 hours between local midnight and
+  UTC midnight those differ, so the nightly sweep deleted the current UTC day's
+  counters and handed every IP a fresh daily allowance early. `reaper.test.ts`
+  had asserted this correctly all along and only fails inside that window,
+  which is why it stayed green for months. If you are reading this because a
+  date-bucketed test just went red for no reason, check the clock first:
+  `select current_setting('TimeZone'), current_date, (now() at time zone
+  'utc')::date`. The same window took out two `budgetPanel` assertions, where
+  the fault was the *fixture* seeding from `current_date` rather than the panel.
+  Rule 11 covers test fixtures too.
 - An operator action needs a real `trace_runs` row to hang an audit event off
   of, so `admin.ts`'s `audit()` writes one, tagged `provider: 'operator'`. Every
   place a run is counted, timed or costed as *visitor* activity has to exclude
@@ -384,24 +409,6 @@ habits worth keeping:
   them, only the map renders a dot.
 
 ## Known and deliberately left
-
-**`listRuns`, `getRun` and `cacheStats` are not in
-`packages/ledger/src/isolation.test.ts`.** CLAUDE.md rule 7 says every
-repository read goes in that table, and these three predate the rule. They *are*
-correctly owner-scoped in code — each takes `OwnerId` and filters on it — so
-this is missing proof rather than a known leak, and the second, RLS-bypassed
-pass is exactly the thing that would catch it if that ever stopped being true.
-Add them next time that file is opened. Phase 2 did not open it.
-
-**`flag_anomalies` writes raw minor units into reader-facing prose.** Its
-`detail` string ends "…mean of 228207 minor units", and the dashboard renders
-that verbatim, so a human reads an unformatted paise figure in the middle of an
-English sentence. The obvious fix — `formatMinor` in
-`packages/ledger/src/repo/reports.ts` — changes tool *output*, which the
-recorded provider fixtures hash over, so it costs a re-record
-(`pnpm db:reset && pnpm db:seed && RECORD=1 pnpm injection:report`) and real API
-spend. It is honest as it stands, since the units are named. Fix it the next
-time something else already requires a re-record.
 
 **Nothing on `/admin` or `/runs` was restyled.** They are the terminal genre by
 decision, not by neglect, and the only change they saw was the shared nav.
