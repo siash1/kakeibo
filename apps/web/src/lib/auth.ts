@@ -59,6 +59,3 @@ export const auth = betterAuth({
     }),
   ],
 })
-
-/** Whether the sign-in UI should offer Google at all. */
-export const googleEnabled = config.GOOGLE_CLIENT_ID !== ''
