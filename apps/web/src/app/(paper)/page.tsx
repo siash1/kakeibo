@@ -444,6 +444,12 @@ export default function LandingPage() {
               <li>
                 <a href="https://github.com/siash1/kakeibo">The source</a>
               </li>
+              <li>
+                <Link href="/privacy">What is stored, and who can read it</Link>
+              </li>
+              <li>
+                <Link href="/terms">Terms</Link>
+              </li>
             </ul>
           </nav>
         </div>
