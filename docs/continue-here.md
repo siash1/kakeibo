@@ -9,8 +9,8 @@ or just say: **"Read docs/continue-here.md and start."**
 
 kakeibo is a from-scratch Gemini agent over a double-entry ledger, live at
 `github.com/siash1/kakeibo`. It is being taken public in four plans plus a UI
-phase. **Three plans are merged. Phase 2 is half built on a branch. Plan D has
-not been written.**
+phase. **Three plans are merged. Phase 2 is built on a branch and not merged.
+Plan D has not been written.**
 
 **Read first, in this order:**
 
@@ -23,9 +23,11 @@ not been written.**
 3. `README.md` for the architecture, `docs/kakeibo_spec.md` for the build spec
    (its "no accounts" non-goal is superseded; §7, §8.6 and §16 carry the Plan
    A and B amendments, and §7/§16 carry Plan C's).
-4. `apps/web/PRODUCT.md` — product truth for the UI work: who the visitor is,
-   what success looks like, what is real and what is synthetic. Written at the
-   start of Phase 2 and it is the thing to argue with, not around.
+4. `apps/web/PRODUCT.md` — product truth for the UI work, and
+   `apps/web/DESIGN.md` — the visual system, written from the built world at
+   the end of Phase 2. PRODUCT.md is the thing to argue with, not around;
+   DESIGN.md describes what shipped, so if it and the code disagree, the code
+   is the bug or the doc is stale and one of them gets fixed.
 5. `docs/superpowers/plans/2026-08-09-auth-and-serverless-readiness.md` (Plan B)
    and `docs/superpowers/plans/2026-08-09-operator-dashboard.md` (Plan C), each
    with its **"What actually happened"** section. Nearly every task in Plan C
@@ -48,17 +50,15 @@ not been written.**
   held to a reviewed allowlist by `admin-containment.test.ts`), eight read
   panels and two audited operator actions at `/admin`.
 
-**233 tests across 30 files, plus a 12-test second isolation pass, all green**
-(`pnpm test`); `pnpm injection:report` still 100%; `pnpm --filter @kakeibo/web
-build` succeeds.
-
 ### In flight: Phase 2, branch `ui-overhaul`
 
-Worktree at `.worktrees/ui-overhaul`, **one commit, not pushed, not merged.**
-The gate is green on it (233 + 12, lint, typecheck, web build).
+Worktree at `.worktrees/ui-overhaul`, **not pushed, not merged.** The gate is
+green on it: `pnpm lint`, `pnpm typecheck`, **233 tests across 30 files plus the
+12-test second isolation pass**, `pnpm --filter @kakeibo/web build`, and
+`pnpm injection:report` still at a 100% block rate.
 
-The owner picked the direction in a structured round; these are decided and not
-to be re-opened:
+The owner picked the direction in two structured rounds; these are decided and
+not to be re-opened:
 
 | | |
 | --- | --- |
@@ -66,8 +66,10 @@ to be re-opened:
 | Type | **Serif display + sans body**; mono only for code, IDs and terminal pages |
 | The seam | **Hard cut, shared nav** — crossing to `/runs` or `/admin` flips the ground entirely |
 | Accent | **None.** Sumi ink on paper; colour only where it means something |
+| Machinery on `/chat` | **A ledger margin rail** — answer as prose, tool calls and cost posting beside it |
+| `/chat` empty state | **A ruled question list** of real questions in the book's voice |
 
-**What the commit contains:**
+**What the branch contains**, in two commits plus this one:
 
 - `apps/web/src/app/globals.css` — two palettes in one file. A `paper`/`sumi`
   ramp at hue ~85 for the product genre, the incumbent cool `ink` ramp kept
@@ -75,52 +77,62 @@ to be re-opened:
   browser surfaces (selection, caret, scrollbars, focus rings) themed per genre.
 - **Route groups `(paper)` and `(terminal)`.** Each layout paints its own
   full-height ground via `[data-genre]`; `body` owns neither, which is what
-  lets a nested route change worlds without fighting the root. Every existing
-  page moved into `(terminal)` unchanged, so nothing broke.
+  lets a nested route change worlds without fighting the root.
 - `apps/web/src/components/ledger.tsx` — the paper primitives. Rules, not
   cards: a section is a ruled band with its heading sitting on the rule. There
   are no cards in a 家計簿.
 - `apps/web/src/components/bars.tsx` — `SpendBars` and `BudgetMeter`.
+- `apps/web/src/components/exchange.tsx` — the exchange primitives: the ledger
+  spread, the margin rail, the turn account, the confirmation slip. **Shared by
+  `/chat` and by the landing page's recorded demo, and that sharing is
+  load-bearing rather than tidy** — the landing's claim is "this is the thing
+  itself, recorded", so if the demo drew its own rules the first thing a
+  visitor would notice on reaching `/chat` is that the demo was a different
+  product.
+- `apps/web/src/components/mark.tsx` — the 家計簿 mark and wordmark, authored
+  SVG in `currentColor`. It is one cell of a ledger grid, ruled into a wide
+  description column and a narrow amount column, with the accountant's double
+  rule struck under the amount. Because every stroke is `currentColor`, the
+  same mark is sumi on paper and phosphor on black; the seam does not need two
+  logos.
+- `apps/web/src/app/(paper)/page.tsx` — the landing, built as a **statement of
+  account for the system itself**: ruled line items, each claim with the
+  measured figure that backs it, closing under a double rule. Every figure is
+  read out of `evals/report/latest.json` or counted off the tool registry at
+  render time, so no number on it can drift from the repo.
+- `apps/web/src/app/(paper)/chat/page.tsx` — the agent, moved from `/`.
+- `apps/web/src/app/(paper)/evals/page.tsx` — the eval report, moved out of the
+  terminal genre. A trace is a machine's own record and belongs in the machine
+  room; an eval report is a *finding*, written for a person deciding whether to
+  believe the thing, which makes it a product surface.
 - `apps/web/src/app/(paper)/dashboard/page.tsx` — the dashboard, with month
   navigation across the seed range.
+- `apps/web/src/lib/report.ts` — one loader for `evals/report/latest.json`, and
+  the extractor that picks the recorded exchange the landing replays. Both
+  pages read the same file on purpose: a landing quoting a pass rate the eval
+  report disagrees with is worse than a landing with no pass rate on it.
 - Two self-hosted faces via `@fontsource-variable`: **Source Serif 4** display,
   **Public Sans** body. Both were chosen partly for *not* being on the design
   skill's banned list of training-data defaults; if you swap them, check that
   list first.
 
-**What remains in Phase 2, in the order to do it:**
-
-1. **Restyle the chat page and move it to `/chat`.** It is currently
-   `app/(terminal)/page.tsx` and still wears terminal styling — correct and
-   unbroken, but it is a product surface and belongs in `(paper)`. Design spec
-   §7 puts the agent at `/chat` and the landing page at `/`.
-2. **Landing page at `/`.** Hero, the free replayed demo, the engineering
-   story, a CTA. This is the one **Persuade** surface in the product; every
-   other page is Operate. `docs/public-launch-prompt.md` §2 names
-   `/imagegen-frontend-web` for the prompting method and Vertex Imagen 4 Ultra
-   (`imagen-4.0-ultra-generate-001`, same GCP project and ADC as Gemini) for
-   generation. Design-reference images stay out of git; final assets go in
-   `apps/web/public/`.
-3. **Brand assets** — the 家計簿 mark and wordmark. `/brandkit`.
-4. **Restyle `/evals` into the paper genre.** It is a product-facing report,
-   not a machine record. Left in `(terminal)` only because moving it without
-   restyling would have shipped ink-on-paper colours.
-5. **Finish the design cycle properly.** The `impeccable` skill's own contract:
-   run its detector over the changed targets
-   (`node ~/.claude/skills/impeccable/scripts/detect.mjs --json <targets>`),
-   spawn `impeccable-finish-reviewer` with screenshots, then
-   `impeccable-documenter` to write `apps/web/DESIGN.md` **from the built
-   world**. A new visual world shipped without DESIGN.md is an incomplete run
-   by that skill's definition, and DESIGN.md is deliberately written at the
-   end, not the start.
+**The landing has no generated imagery, and that was a decision.** The launch
+prompt names Vertex Imagen 4 Ultra for it. What the page actually needed was
+proof, and the honest proof was already in the repo: a real turn from the last
+eval run — its question, the tools it called, the answer it gave, the gate it
+stopped at, and what it cost — replayed in the same components the live page
+uses. A generated hero above that would have been the only untrue thing on the
+page. If you want brand imagery later, the mark is vector and the space is
+there; do not put a decorative photograph above the recorded exchange.
 
 ### Not started: Plan D
 
 Needs writing with `/writing-plans`. Scope, from the design spec: the sign-in /
 sign-up / `/settings` pages, `/privacy` and `/terms` (all paper-genre product
-pages — do Phase 2 first or build them twice), Turnstile on the anonymous entry
-point (§5 layer 4), and the Vercel + Neon deploy (§10). The deploy already has
-the pieces Plan C built for it: `ALLOW_DESTRUCTIVE_RESET` and
+pages — the world and its primitives now exist, so build them out of
+`components/ledger.tsx` rather than inventing a third vocabulary), Turnstile on
+the anonymous entry point (§5 layer 4), and the Vercel + Neon deploy (§10). The
+deploy already has the pieces Plan C built for it: `ALLOW_DESTRUCTIVE_RESET` and
 `assertResettable` in `packages/ledger/src/reset-guard.ts` exist so a
 production `DATABASE_URL` in a local shell cannot eat a live database with one
 `pnpm eval`.
@@ -137,18 +149,24 @@ pnpm db:up && pnpm db:migrate && pnpm db:seed
 pnpm test                       # expect 233 + 12, all green
 ```
 
-To pick up Phase 2:
+To pick up the branch:
 
 ```bash
 cd .worktrees/ui-overhaul       # or: git worktree add .worktrees/ui-overhaul ui-overhaul
 pnpm install && cp ../../.env .env
-pnpm dev
+PORT=3100 BETTER_AUTH_URL=http://localhost:3100 pnpm dev
 ```
 
-Then sign in (anonymous is enough) and visit `/dashboard`. To see `/admin`, set
-`ADMIN_EMAILS` in `.env` to an address you sign in with **and** mark it
-verified once — `/admin` now requires `emailVerified`, and no mail provider is
-configured:
+**Use a port nothing else is on, and set `BETTER_AUTH_URL` to match it.** A
+`next dev` left running on 3000 from another worktree serves *that* worktree
+silently: every route you just added 404s while auth keeps working, which reads
+as a routing bug in your own code for about twenty minutes. Better Auth also
+rejects a mutating call whose `Origin` does not match `BETTER_AUTH_URL`, so the
+two have to move together.
+
+To see `/admin`, set `ADMIN_EMAILS` in `.env` to an address you sign in with
+**and** mark it verified once — `/admin` requires `emailVerified` and no mail
+provider is configured:
 
 ```sql
 update "user" set email_verified = true where email = '<your address>';
@@ -157,23 +175,84 @@ update "user" set email_verified = true where email = '<your address>';
 ## How to work
 
 The project skills in `.claude/skills/` are used at the step they are named
-for: `/impeccable` for the remaining UI work, `/writing-plans` for Plan D,
-`/using-git-worktrees` to isolate, `/executing-plans` or
-`/subagent-driven-development` to implement,
+for: `/writing-plans` for Plan D, `/using-git-worktrees` to isolate,
+`/executing-plans` or `/subagent-driven-development` to implement,
 `/verification-before-completion` before claiming anything is done, and
-`/finishing-a-development-branch` to land it.
+`/finishing-a-development-branch` to land it. `/impeccable` owns UI work; its
+cycle is detector → build → two batched screenshot rounds → a finish review in
+a **fresh context** → DESIGN.md, and the review is where the real defects were
+caught both times it ran.
 
 Subagent-driven execution earned its cost on Plan C and is worth repeating for
 anything plan-shaped: every one of its ten task briefs contained at least one
-real defect, and in each case the implementer that pushed back was right. Two
-habits from that run are worth keeping:
+real defect, and in each case the implementer that pushed back was right. Three
+habits worth keeping:
 
 - **Run the full gate yourself before each review.** One implementer reported
   green on a 119-test subset while the full suite failed 8 — and the failure
   was that its own change truncated the seeded ledger on every test run.
 - **Hand briefs over as files, and treat their code as a draft to verify.**
+- **Look at the thing.** Phase 2's worst two defects — a dashboard figure that
+  had been wrong on every month since it shipped, and a landing page with a
+  hole in the middle of it — were both invisible to tests, to typecheck and to
+  HTML assertions, and both were obvious in a screenshot.
 
 ## Things that cost time to learn — do not rediscover them
+
+**Looking at the UI.**
+
+- **A screenshot is evidence; a full-page screenshot is evidence about a
+  document, not about a viewport.** `position: sticky` renders at its scroll-0
+  position in a full-page capture, so a sticky composer appears to sit on top
+  of content it never covers in a real browser; an inner `overflow-x-auto`
+  container renders only its visible slice, so a scrollable table appears to be
+  clipped. Both cost a round of chasing defects that were not there. Judge
+  occlusion and scrollers from a **viewport-sized** capture, and measure with
+  `getBoundingClientRect` before believing either.
+- **A full-page capture of a long page is also too small to read.** Crop to a
+  section at `deviceScaleFactor: 3` before concluding anything about type. The
+  mobile tool list looked fine at thumbnail size and was truncating every name.
+- **The session cookie is `httpOnly`, so a headless capture is signed out by
+  default** — every owner-scoped page shows its empty state. The fix costs
+  nothing and no model call: in the page context,
+  `fetch('/api/auth/sign-in/anonymous', { method: 'POST', headers: {
+  'Content-Type': 'application/json' }, body: '{}' })`. **The JSON content type
+  is required** — without it Better Auth answers `415` and you get a signed-out
+  page and no error worth reading. `/dashboard` clones the demo ledger itself
+  on first view, so that one call is enough to see it populated.
+
+**Tests and the shared dev database.**
+
+- **Driving the web app against the dev database breaks `pnpm test`.**
+  `safetyPanel` in `admin.test.ts` counts confirmation decisions **across all
+  owners** — it is the operator's cross-tenant panel, that is its job — so one
+  real allowed write from a browser session makes `expect(panel.allowed).toBe(2)`
+  fail with 3. This is the same hazard class as the `tracer.test.ts` leak below,
+  but it fires from ordinary use of the app rather than from another test. It is
+  not a defect in the panel and **the assertion is not the thing to change**:
+  run `pnpm db:reset && pnpm db:seed` before the gate, or run the gate before
+  you go clicking. It cost two red suites in one session.
+- `packages/ledger/src/repo/tracer.test.ts` inserts a `tool_call` event named
+  `set_budget` and never deletes it (it resets its *owner's* rows on the way
+  in, but that owner is not itself the target of the delete). Any later test
+  that does an exact-count assertion on a real tool name across all owners will
+  pick that row up and flake on a second consecutive `pnpm test` run against
+  the same database. `admin.test.ts`'s `toolsPanel` suite works around it by
+  using tool names no real tool has (`__test_tool_a`, `__test_tool_b`) rather
+  than fixing the leak, which is documented in a comment at the top of that
+  `describe` block.
+- A full `pnpm test` run **concurrent with other heavy work** made the MCP
+  suite take 900 seconds and time out; run alone, immediately after, the same
+  test took 2.6 seconds. It was resource contention, not a defect.
+
+**The web app's module boundaries.**
+
+- `apps/web` imports money formatting from **`@kakeibo/ledger/money`**, not from
+  the package barrel. `money.ts` imports nothing; the barrel re-exports the
+  repositories, and pulling that into a `'use client'` component drags Drizzle
+  and pg toward the browser bundle. The `./*` subpath export already exists, so
+  this costs nothing but knowing to do it. The same rule is why `packages/mcp`
+  imports core through subpaths (CLAUDE.md, Layout).
 
 **The provider.**
 
@@ -192,6 +271,10 @@ habits from that run are worth keeping:
 - Model IDs: `gemini-3.6-flash`, `gemini-3.5-flash-lite`,
   `gemini-3.1-pro-preview`. The spec's `gemini-3-flash` / `gemini-3-pro` never
   existed. Re-resolve with `pnpm check:providers`.
+- `onToolResult` sends the raw payload cut at 200 characters, which is why the
+  margin rail parses it and prints nothing when it will not parse rather than
+  showing a JSON fragment ending mid-token. Widen that cut only if you also
+  want every 40kB tool result streaming to every browser.
 
 **The database.**
 
@@ -263,6 +346,11 @@ habits from that run are worth keeping:
 - `executeToolUse` deliberately does not record a `confirm` trace event when the
   caller already ruled on the call. Two events for one decision doubles every
   "writes allowed" figure the admin dashboard reads off the timeline.
+- **A turn held at the gate has produced no prose and completed no tool calls.**
+  Any UI that renders a turn has to handle that state explicitly or it draws two
+  empty columns on the one screen whose whole job is to say the machinery
+  stopped. `/chat` posts the proposed write to the margin as "awaiting your
+  decision" and says so in the book's column.
 
 **The operator dashboard (Plan C).**
 
@@ -288,20 +376,6 @@ habits from that run are worth keeping:
   the whole reason the audit event lives in `trace_events` rather than a
   separate log is so an intervention shows up in the same timeline as
   everything else.
-- `packages/ledger/src/repo/tracer.test.ts` inserts a `tool_call` event named
-  `set_budget` and never deletes it (it resets its *owner's* rows on the way
-  in, but that owner is not itself the target of the delete). Any later test
-  that does an exact-count assertion on a real tool name across all owners will
-  pick that row up and flake on a second consecutive `pnpm test` run against
-  the same database. `admin.test.ts`'s `toolsPanel` suite works around it by
-  using tool names no real tool has (`__test_tool_a`, `__test_tool_b`) rather
-  than fixing the leak, which is documented in a comment at the top of that
-  `describe` block.
-- A full `pnpm test` run **concurrent with other heavy work** made the MCP
-  suite take 900 seconds and time out; run alone, immediately after, the same
-  test took 2.6 seconds. It was resource contention, not a defect — run the
-  gate with nothing else going on, per the constraint at the top of every task
-  brief in this plan.
 - Vercel's `x-vercel-ip-*` headers are derived from the connection's public IP
   at the edge and cannot be spoofed by the client the way `x-forwarded-for`
   can; Vercel explicitly overwrites the latter to prevent exactly that. Worth
@@ -311,24 +385,26 @@ habits from that run are worth keeping:
 
 ## Known and deliberately left
 
-One real gap, triaged during Plan C's final review and left rather than fixed,
-because closing it belongs with the suite it belongs to rather than with an
-operator dashboard:
-
 **`listRuns`, `getRun` and `cacheStats` are not in
 `packages/ledger/src/isolation.test.ts`.** CLAUDE.md rule 7 says every
 repository read goes in that table, and these three predate the rule. They *are*
 correctly owner-scoped in code — each takes `OwnerId` and filters on it — so
 this is missing proof rather than a known leak, and the second, RLS-bypassed
 pass is exactly the thing that would catch it if that ever stopped being true.
-Add them next time that file is opened.
+Add them next time that file is opened. Phase 2 did not open it.
 
-**The populated dashboard has never been looked at.** Its empty state and its
-mobile layout were captured and checked; the version with 25 bars, budget
-meters and anomaly rows was verified by parsing the HTML for the right figures
-and row counts. That is evidence the data path works and no evidence at all
-about whether it reads well. Closing it needs a browser session with a real
-cookie — see "Screenshotting the app" above.
+**`flag_anomalies` writes raw minor units into reader-facing prose.** Its
+`detail` string ends "…mean of 228207 minor units", and the dashboard renders
+that verbatim, so a human reads an unformatted paise figure in the middle of an
+English sentence. The obvious fix — `formatMinor` in
+`packages/ledger/src/repo/reports.ts` — changes tool *output*, which the
+recorded provider fixtures hash over, so it costs a re-record
+(`pnpm db:reset && pnpm db:seed && RECORD=1 pnpm injection:report`) and real API
+spend. It is honest as it stands, since the units are named. Fix it the next
+time something else already requires a re-record.
+
+**Nothing on `/admin` or `/runs` was restyled.** They are the terminal genre by
+decision, not by neglect, and the only change they saw was the shared nav.
 
 Not gaps, for the avoidance of a second look: `adminGetRun` and everything else
 in `packages/ledger/src/repo/admin.ts` are deliberately absent from the
@@ -363,7 +439,7 @@ Plan C just built is unreachable on the one database it exists to watch.
 sign-up is public at `/api/auth/sign-up/email`. Without the check, `email` on
 a password account is self-asserted: whoever registers the allowlisted
 address first *becomes* the operator, and the owner's address is sitting in
-plain sight in all 18 commit headers of a public repo.
+plain sight in every commit header of a public repo.
 
 No mail provider is configured anywhere in this codebase, so nothing can
 currently set `email_verified` on a normal sign-up — which means the fix, left
@@ -421,7 +497,7 @@ Decided during Plan B, and worth the same treatment:
 | Persisting conversation history | Replace the thread, never append: the context manager rewrites history when it summarises |
 | Quota on a resumed turn | Free. It was charged when the turn started; blocking and the daily cap still apply |
 
-Decided during Phase 2, by the owner, in a structured round — same standing:
+Decided during Phase 2, by the owner, in structured rounds — same standing:
 
 | Question | Answer |
 | --- | --- |
@@ -429,6 +505,8 @@ Decided during Phase 2, by the owner, in a structured round — same standing:
 | Typographic voice | Serif display + sans body; mono only for code, IDs and terminal pages |
 | Where the two genres meet | Hard cut, shared nav — crossing flips the ground entirely |
 | Accent colour | **None.** Sumi ink on paper; colour only where it carries meaning |
+| How much machinery `/chat` shows | A ledger margin rail, always visible, never interrupting the read |
+| What `/chat` opens on | A ruled question list — one click to a live turn |
 
 The no-accent decision is the load-bearing one and the easiest to erode. It
 means emphasis comes from weight, scale and the rules — and it is why the
@@ -443,8 +521,11 @@ wants it raised they will say so.
 ## The bar
 
 Every number in the README is reproducible by a script in this repo
-(`pnpm metrics`, or the command named next to the figure). Guardrails are
-architectural, not prompt-deep: the write gate lives in the loop, and the RLS
-bypass the admin dashboard needs lives in exactly one file, held to that by a
-containment test rather than a comment. `pnpm injection:report` stays at 100%.
-And the commit trail is the owner's — no AI co-author trailers, ever.
+(`pnpm metrics`, or the command named next to the figure). The site now
+inherits that rule literally: every figure on `/` and `/evals` is read out of
+`evals/report/latest.json` or counted off the tool registry at render time, so
+there is no number on the marketing surface that a script cannot reproduce.
+Guardrails are architectural, not prompt-deep: the write gate lives in the loop,
+and the RLS bypass the admin dashboard needs lives in exactly one file, held to
+that by a containment test rather than a comment. `pnpm injection:report` stays
+at 100%. And the commit trail is the owner's — no AI co-author trailers, ever.

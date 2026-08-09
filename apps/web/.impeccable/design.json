@@ -1,0 +1,392 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-09T18:12:19Z",
+  "title": "Design System: kakeibo",
+  "extensions": {
+    "colorMeta": {
+      "sumi-900": {
+        "role": "primary",
+        "displayName": "Sumi Ink",
+        "canonical": "oklch(0.205 0.014 62)",
+        "tonalRamp": [
+          "oklch(0.150 0.014 62)",
+          "oklch(0.264 0.014 62)",
+          "oklch(0.379 0.014 62)",
+          "oklch(0.493 0.014 62)",
+          "oklch(0.607 0.014 62)",
+          "oklch(0.721 0.014 62)",
+          "oklch(0.836 0.014 62)",
+          "oklch(0.950 0.014 62)"
+        ]
+      },
+      "sumi-600": {
+        "role": "primary",
+        "displayName": "Sumi Muted",
+        "canonical": "oklch(0.44 0.012 65)",
+        "tonalRamp": [
+          "oklch(0.150 0.012 65)",
+          "oklch(0.264 0.012 65)",
+          "oklch(0.379 0.012 65)",
+          "oklch(0.493 0.012 65)",
+          "oklch(0.607 0.012 65)",
+          "oklch(0.721 0.012 65)",
+          "oklch(0.836 0.012 65)",
+          "oklch(0.950 0.012 65)"
+        ]
+      },
+      "sumi-500": {
+        "role": "primary",
+        "displayName": "Sumi Faint",
+        "canonical": "oklch(0.545 0.010 68)",
+        "tonalRamp": [
+          "oklch(0.150 0.01 68)",
+          "oklch(0.264 0.01 68)",
+          "oklch(0.379 0.01 68)",
+          "oklch(0.493 0.01 68)",
+          "oklch(0.607 0.01 68)",
+          "oklch(0.721 0.01 68)",
+          "oklch(0.836 0.01 68)",
+          "oklch(0.950 0.01 68)"
+        ]
+      },
+      "paper-50": {
+        "role": "neutral",
+        "displayName": "Ledger Paper",
+        "canonical": "oklch(0.985 0.006 85)",
+        "tonalRamp": [
+          "oklch(0.150 0.006 85)",
+          "oklch(0.264 0.006 85)",
+          "oklch(0.379 0.006 85)",
+          "oklch(0.493 0.006 85)",
+          "oklch(0.607 0.006 85)",
+          "oklch(0.721 0.006 85)",
+          "oklch(0.836 0.006 85)",
+          "oklch(0.950 0.006 85)"
+        ]
+      },
+      "paper-200": {
+        "role": "neutral",
+        "displayName": "Paper Shade",
+        "canonical": "oklch(0.945 0.012 84)",
+        "tonalRamp": [
+          "oklch(0.150 0.012 84)",
+          "oklch(0.264 0.012 84)",
+          "oklch(0.379 0.012 84)",
+          "oklch(0.493 0.012 84)",
+          "oklch(0.607 0.012 84)",
+          "oklch(0.721 0.012 84)",
+          "oklch(0.836 0.012 84)",
+          "oklch(0.950 0.012 84)"
+        ]
+      },
+      "rule": {
+        "role": "neutral",
+        "displayName": "Hairline Rule",
+        "canonical": "oklch(0.855 0.012 82)",
+        "tonalRamp": [
+          "oklch(0.150 0.012 82)",
+          "oklch(0.264 0.012 82)",
+          "oklch(0.379 0.012 82)",
+          "oklch(0.493 0.012 82)",
+          "oklch(0.607 0.012 82)",
+          "oklch(0.721 0.012 82)",
+          "oklch(0.836 0.012 82)",
+          "oklch(0.950 0.012 82)"
+        ]
+      },
+      "rule-strong": {
+        "role": "neutral",
+        "displayName": "Structural Rule",
+        "canonical": "oklch(0.60 0.016 78)",
+        "tonalRamp": [
+          "oklch(0.150 0.016 78)",
+          "oklch(0.264 0.016 78)",
+          "oklch(0.379 0.016 78)",
+          "oklch(0.493 0.016 78)",
+          "oklch(0.607 0.016 78)",
+          "oklch(0.721 0.016 78)",
+          "oklch(0.836 0.016 78)",
+          "oklch(0.950 0.016 78)"
+        ]
+      },
+      "warn-ink": {
+        "role": "tertiary",
+        "displayName": "Warn Ink",
+        "canonical": "oklch(0.50 0.12 70)",
+        "tonalRamp": [
+          "oklch(0.150 0.12 70)",
+          "oklch(0.264 0.12 70)",
+          "oklch(0.379 0.12 70)",
+          "oklch(0.493 0.12 70)",
+          "oklch(0.607 0.12 70)",
+          "oklch(0.721 0.12 70)",
+          "oklch(0.836 0.12 70)",
+          "oklch(0.950 0.12 70)"
+        ]
+      },
+      "danger-ink": {
+        "role": "tertiary",
+        "displayName": "Danger Ink",
+        "canonical": "oklch(0.49 0.19 25)",
+        "tonalRamp": [
+          "oklch(0.150 0.19 25)",
+          "oklch(0.264 0.19 25)",
+          "oklch(0.379 0.19 25)",
+          "oklch(0.493 0.19 25)",
+          "oklch(0.607 0.19 25)",
+          "oklch(0.721 0.19 25)",
+          "oklch(0.836 0.19 25)",
+          "oklch(0.950 0.19 25)"
+        ]
+      },
+      "ok-ink": {
+        "role": "tertiary",
+        "displayName": "Return Ink",
+        "canonical": "oklch(0.46 0.13 155)",
+        "tonalRamp": [
+          "oklch(0.150 0.13 155)",
+          "oklch(0.264 0.13 155)",
+          "oklch(0.379 0.13 155)",
+          "oklch(0.493 0.13 155)",
+          "oklch(0.607 0.13 155)",
+          "oklch(0.721 0.13 155)",
+          "oklch(0.836 0.13 155)",
+          "oklch(0.950 0.13 155)"
+        ]
+      },
+      "ink-950": {
+        "role": "neutral",
+        "displayName": "Machine Ground",
+        "canonical": "oklch(0.16 0.008 265)",
+        "tonalRamp": [
+          "oklch(0.150 0.008 265)",
+          "oklch(0.264 0.008 265)",
+          "oklch(0.379 0.008 265)",
+          "oklch(0.493 0.008 265)",
+          "oklch(0.607 0.008 265)",
+          "oklch(0.721 0.008 265)",
+          "oklch(0.836 0.008 265)",
+          "oklch(0.950 0.008 265)"
+        ]
+      },
+      "accent": {
+        "role": "secondary",
+        "displayName": "Terminal Cyan",
+        "canonical": "oklch(0.72 0.14 195)",
+        "tonalRamp": [
+          "oklch(0.150 0.14 195)",
+          "oklch(0.264 0.14 195)",
+          "oklch(0.379 0.14 195)",
+          "oklch(0.493 0.14 195)",
+          "oklch(0.607 0.14 195)",
+          "oklch(0.721 0.14 195)",
+          "oklch(0.836 0.14 195)",
+          "oklch(0.950 0.14 195)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "One per page, the largest type on the site. The landing thesis line."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "A page title — Evals, a dashboard month."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "A visitor's question, set as the heading of its own entry. Also the composer input."
+      },
+      "section": {
+        "displayName": "Section",
+        "purpose": "A section heading sitting on its rule, not above a box."
+      },
+      "figure": {
+        "displayName": "Figure",
+        "purpose": "A headline amount or count. Serif, tabular — the book’s own voice for numbers."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Prose and answers, capped at 68ch."
+      },
+      "secondary": {
+        "displayName": "Secondary",
+        "purpose": "The sentence under a heading, a row's supporting detail."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Column heads, units, tiers, status words. Uppercase, tracked."
+      },
+      "mono": {
+        "displayName": "Mono",
+        "purpose": "Tool names, task ids, code, and the whole terminal genre. Never a costume."
+      }
+    },
+    "shadows": [],
+    "motion": [
+      {
+        "name": "state",
+        "value": "colors 150ms",
+        "purpose": "Fill and rule colour changes on hover and focus. The only transition on a product surface."
+      },
+      {
+        "name": "bar-grow",
+        "value": "width 500ms cubic-bezier(0, 0, 0.2, 1)",
+        "purpose": "A spend bar or budget meter settling to its length on first paint."
+      },
+      {
+        "name": "pulse-dot",
+        "value": "1.2s ease-in-out infinite, opacity 0.35 to 1",
+        "purpose": "A tool call still running in the margin. Disabled under prefers-reduced-motion."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "sm",
+        "value": "640px"
+      },
+      {
+        "name": "lg",
+        "value": "1024px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one filled element on a product surface, which is what makes it read as the action.",
+      "html": "<button class=\"ds-btn-primary\">Ask it something</button>",
+      "css": ".ds-btn-primary { background: oklch(0.205 0.014 62); color: oklch(0.985 0.006 85); font: 400 14px/1.4 \"Public Sans Variable\", system-ui, sans-serif; padding: 10px 24px; border: none; border-radius: 0; cursor: pointer; transition: background-color 150ms; } .ds-btn-primary:hover { background: oklch(0.285 0.014 62); } .ds-btn-primary:focus-visible { outline: 2px solid oklch(0.205 0.014 62); outline-offset: 2px; } .ds-btn-primary:disabled { background: oklch(0.945 0.012 84); color: oklch(0.545 0.010 68); cursor: default; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "A 1px outline beside the primary. Never used alone.",
+      "html": "<button class=\"ds-btn-secondary\">Read a trace</button>",
+      "css": ".ds-btn-secondary { background: transparent; color: oklch(0.205 0.014 62); font: 400 14px/1.4 \"Public Sans Variable\", system-ui, sans-serif; padding: 10px 24px; border: 1px solid oklch(0.205 0.014 62); border-radius: 0; cursor: pointer; transition: background-color 150ms; } .ds-btn-secondary:hover { background: oklch(0.945 0.012 84); } .ds-btn-secondary:focus-visible { outline: 2px solid oklch(0.205 0.014 62); outline-offset: 2px; }"
+    },
+    {
+      "name": "Composer",
+      "kind": "input",
+      "refersTo": "composer",
+      "description": "The blank line at the foot of a ledger page. A writing rule, not a boxed field; the rule itself carries focus.",
+      "html": "<form class=\"ds-composer\"><input class=\"ds-composer-input\" placeholder=\"Ask about your ledger…\" aria-label=\"Ask about your ledger\"><button class=\"ds-composer-send\">Ask</button></form>",
+      "css": ".ds-composer { display: flex; align-items: center; gap: 16px; border-bottom: 2px solid oklch(0.60 0.016 78); padding-bottom: 8px; transition: border-color 150ms; } .ds-composer:focus-within { border-bottom-color: oklch(0.205 0.014 62); } .ds-composer-input { flex: 1; min-width: 0; background: transparent; border: none; padding: 4px 0; color: oklch(0.205 0.014 62); font: 400 18px/1.4 \"Source Serif 4 Variable\", Georgia, serif; } .ds-composer-input::placeholder { color: oklch(0.545 0.010 68); } .ds-composer-input:focus { outline: none; } .ds-composer-send { flex-shrink: 0; background: oklch(0.205 0.014 62); color: oklch(0.985 0.006 85); font: 400 13px/1.4 \"Public Sans Variable\", system-ui, sans-serif; padding: 8px 20px; border: none; border-radius: 0; cursor: pointer; }"
+    },
+    {
+      "name": "Ruled Section Band",
+      "kind": "card",
+      "refersTo": "ruled-row",
+      "description": "The system’s replacement for a card: a rule, a serif heading sitting on it, a note, then hairline-separated rows.",
+      "html": "<section class=\"ds-band\"><div class=\"ds-band-head\"><h2>Where it went</h2></div><p class=\"ds-band-note\">Expense accounts only.</p><div class=\"ds-band-rows\"><div class=\"ds-row\"><span>Groceries</span><span class=\"ds-num\">₹44,747.00</span></div><div class=\"ds-row\"><span>Rent</span><span class=\"ds-num\">₹32,000.00</span></div></div></section>",
+      "css": ".ds-band { color: oklch(0.205 0.014 62); } .ds-band-head { border-top: 1px solid oklch(0.205 0.014 62); padding-top: 12px; } .ds-band-head h2 { margin: 0; font: 600 19px/1.3 \"Source Serif 4 Variable\", Georgia, serif; letter-spacing: -0.01em; } .ds-band-note { margin: 4px 0 0; max-width: 70ch; font: 400 13px/1.5 \"Public Sans Variable\", system-ui, sans-serif; color: oklch(0.44 0.012 65); } .ds-band-rows { margin-top: 24px; border-top: 1px solid oklch(0.60 0.016 78); } .ds-row { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; border-bottom: 1px solid oklch(0.855 0.012 82); padding: 10px 0; font: 400 13px/1.4 \"Public Sans Variable\", system-ui, sans-serif; } .ds-num { font-family: \"Source Serif 4 Variable\", Georgia, serif; font-variant-numeric: tabular-nums lining-nums; }"
+    },
+    {
+      "name": "Margin Entry",
+      "kind": "custom",
+      "refersTo": "margin-rail",
+      "description": "One posted entry in the ledger spread’s margin: the tool, its arguments glossed to a line, and what came back. A write is marked.",
+      "html": "<aside class=\"ds-margin\"><div class=\"ds-margin-head\">Entries</div><ol class=\"ds-margin-list\"><li class=\"ds-margin-entry\"><div class=\"ds-margin-top\"><span class=\"ds-margin-name\">set_budget</span><span class=\"ds-mark-warn\">write</span></div><div class=\"ds-margin-args\">category Groceries · amount ₹20,000.00</div><div class=\"ds-margin-await\">awaiting your decision</div></li></ol></aside>",
+      "css": ".ds-margin { width: 13.5rem; border-left: 1px solid oklch(0.855 0.012 82); padding-left: 20px; color: oklch(0.205 0.014 62); font-family: \"Public Sans Variable\", system-ui, sans-serif; } .ds-margin-head { font-size: 12px; text-transform: uppercase; letter-spacing: 0.11em; color: oklch(0.545 0.010 68); } .ds-margin-list { margin: 8px 0 0; padding: 0; list-style: none; border-top: 1px solid oklch(0.60 0.016 78); } .ds-margin-entry { border-bottom: 1px solid oklch(0.855 0.012 82); padding: 8px 0; } .ds-margin-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; } .ds-margin-name { font-size: 12px; } .ds-mark-warn { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: oklch(0.50 0.12 70); } .ds-margin-args { font-size: 11px; line-height: 1.4; color: oklch(0.545 0.010 68); overflow-wrap: break-word; } .ds-margin-await { margin-top: 2px; font-size: 11px; color: oklch(0.50 0.12 70); }"
+    },
+    {
+      "name": "Confirmation Slip",
+      "kind": "custom",
+      "refersTo": "ruled-row",
+      "description": "The write gate. Rules off top and bottom across the whole spread because the turn has genuinely stopped, suspended in the database, waiting on this answer.",
+      "html": "<section class=\"ds-slip\"><div class=\"ds-slip-head\"><h3>This will change your ledger</h3><span class=\"ds-slip-tool\">set_budget</span></div><p class=\"ds-slip-summary\">set the Groceries budget for 2025-03 to ₹20,000.00</p><dl class=\"ds-slip-args\"><div><dt>amount_minor</dt><dd class=\"ds-num\">₹20,000.00 <span class=\"ds-slip-raw\">2000000 minor units</span></dd></div></dl><div class=\"ds-slip-actions\"><button class=\"ds-btn-primary\">Allow</button><button class=\"ds-btn-secondary\">Decline</button><span class=\"ds-slip-hint\">The turn is paused until you decide.</span></div></section>",
+      "css": ".ds-slip { border-top: 2px solid oklch(0.205 0.014 62); border-bottom: 2px solid oklch(0.205 0.014 62); padding: 20px 0; color: oklch(0.205 0.014 62); font-family: \"Public Sans Variable\", system-ui, sans-serif; } .ds-slip-head { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; } .ds-slip-head h3 { margin: 0; font: 600 17px/1.3 \"Source Serif 4 Variable\", Georgia, serif; letter-spacing: -0.01em; } .ds-slip-tool { font-size: 12px; text-transform: uppercase; letter-spacing: 0.09em; color: oklch(0.44 0.012 65); } .ds-slip-summary { margin: 8px 0 0; max-width: 62ch; font-size: 15px; line-height: 1.6; } .ds-slip-args { margin: 16px 0 0; border-top: 1px solid oklch(0.855 0.012 82); } .ds-slip-args > div { display: grid; grid-template-columns: 10rem minmax(0,1fr); gap: 16px; align-items: baseline; border-bottom: 1px solid oklch(0.855 0.012 82); padding: 6px 0; } .ds-slip-args dt { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: oklch(0.545 0.010 68); } .ds-slip-args dd { margin: 0; font-size: 13px; font-family: \"Source Serif 4 Variable\", Georgia, serif; font-variant-numeric: tabular-nums; } .ds-slip-raw { margin-left: 8px; font-size: 12px; color: oklch(0.545 0.010 68); } .ds-slip-actions { display: flex; align-items: center; gap: 12px; margin-top: 20px; } .ds-slip-hint { font-size: 12px; color: oklch(0.545 0.010 68); } .ds-btn-primary { background: oklch(0.205 0.014 62); color: oklch(0.985 0.006 85); font: 400 13px/1.4 \"Public Sans Variable\", system-ui, sans-serif; padding: 8px 20px; border: none; border-radius: 0; cursor: pointer; } .ds-btn-primary:hover { background: oklch(0.285 0.014 62); } .ds-btn-secondary { background: transparent; color: oklch(0.205 0.014 62); font: 400 13px/1.4 \"Public Sans Variable\", system-ui, sans-serif; padding: 8px 20px; border: 1px solid oklch(0.205 0.014 62); border-radius: 0; cursor: pointer; } .ds-btn-secondary:hover { background: oklch(0.945 0.012 84); }"
+    },
+    {
+      "name": "Navigation",
+      "kind": "nav",
+      "refersTo": "margin-rail",
+      "description": "One bar across both grounds, carrying no colours of its own — every value inherits from the genre wrapper, which is what makes the ground flip read as a crossing rather than as a different site.",
+      "html": "<header class=\"ds-nav\"><a class=\"ds-nav-mark\" href=\"/\"><svg viewBox=\"0 0 24 24\" width=\"15\" height=\"15\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.25\" stroke-linecap=\"square\" aria-hidden=\"true\"><rect x=\"2.5\" y=\"2.5\" width=\"19\" height=\"19\"/><path d=\"M14.5 2.5 V21.5\"/><path d=\"M5.5 9 H11.5 M5.5 13 H11.5\" opacity=\"0.55\"/><path d=\"M16.5 15.5 H19.5 M16.5 18 H19.5\"/></svg><span class=\"ds-nav-word\">kakeibo</span><span class=\"ds-nav-kanji\">家計簿</span></a><nav class=\"ds-nav-links\"><a class=\"ds-nav-link ds-active\"><span>chat</span></a><a class=\"ds-nav-link\">dashboard</a><a class=\"ds-nav-link\">traces</a><a class=\"ds-nav-link\">evals</a></nav></header>",
+      "css": ".ds-nav { display: flex; align-items: center; gap: 28px; height: 56px; padding: 0 24px; background: oklch(0.985 0.006 85); color: oklch(0.205 0.014 62); border-bottom: 1px solid color-mix(in oklch, currentColor 12%, transparent); font-family: \"Public Sans Variable\", system-ui, sans-serif; } .ds-nav-mark { display: inline-flex; align-items: baseline; gap: 10px; text-decoration: none; color: inherit; } .ds-nav-word { font: 600 15px/1 \"Source Serif 4 Variable\", Georgia, serif; letter-spacing: -0.015em; } .ds-nav-kanji { font-size: 9px; letter-spacing: 0.08em; opacity: 0.5; } .ds-nav-links { display: flex; align-items: center; gap: 4px; } .ds-nav-link { padding: 4px 10px; font-size: 13px; text-decoration: none; color: inherit; opacity: 0.5; cursor: pointer; transition: opacity 150ms; } .ds-nav-link:hover { opacity: 0.8; } .ds-nav-link.ds-active { opacity: 1; } .ds-nav-link.ds-active span { border-bottom: 1px solid currentColor; padding-bottom: 2px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Household Account Book and the Machine Room",
+    "overview": "kakeibo is a 家計簿 — a Japanese household account book — and the product surfaces are built as one: warm paper, sumi ink, and ruled hairlines, with the page divided by lines rather than by boxes. The engineering is the product, so the machinery is never hidden, but it is set the way an account book sets arithmetic: the narrative in the wide column, the entries posted in the margin beside it, the figures aligned so a column can be read down.\n\nThe site has two grounds, not one theme with two modes. The visitor’s surfaces are paper. The machine’s own record keeps the dark monospace terminal it was born in, because a trace is a machine writing to itself. Crossing between them flips the ground completely and keeps one navigation bar, so the change reads as walking into another room of the same building rather than as arriving at a different site.\n\nThe paper world has no chromatic accent at all. Emphasis is carried by weight, scale, and the rules themselves, which is what leaves colour free to mean something: an amber word on this site always marks a write, an overrun, or an anomaly, and it reads as a signal precisely because nothing decorative is competing with it.",
+    "keyCharacteristics": [
+      "Rules, not cards — a section is a ruled band, not a box",
+      "No accent colour; colour appears only where it carries meaning",
+      "Serif for figures and headings, sans for prose, mono only for code and IDs",
+      "Tabular numerals everywhere an amount appears",
+      "Square corners; the only radius on the site is the cap of a bar",
+      "Two grounds with a hard seam and one shared nav"
+    ],
+    "rules": [
+      {
+        "name": "The No Accent Rule",
+        "section": "colors",
+        "body": "The paper world has no brand accent. Emphasis comes from weight, scale, and the rules. Colour appears only where it carries meaning — a write, an overrun, an anomaly, an error — and never to confirm that something is fine. Adding \"just one accent\" later does not add a colour; it removes the reason the status inks read as signals."
+      },
+      {
+        "name": "The Nothing-Is-Green-When-It-Is-Fine Rule",
+        "section": "colors",
+        "body": "A pass rate of 100%, a clean class, a successful call: all of these are ink. A wall of green costs the page the one thing that makes a failure leap off it. Only a shortfall takes a tone."
+      },
+      {
+        "name": "The Two Grounds Rule",
+        "section": "colors",
+        "body": "Each route group's layout paints its own full-height ground via [data-genre]. body owns neither. A surface never mixes the two palettes, and the seam between them is a hard cut, not a gradient."
+      },
+      {
+        "name": "The Tabular Figure Rule",
+        "section": "typography",
+        "body": "Every amount carries .num (tabular-nums lining-nums) and is set in the serif on paper, in the mono in the terminal. A ledger whose columns do not line up reads as untrustworthy no matter how correct it is."
+      },
+      {
+        "name": "The Mono-Is-Not-A-Costume Rule",
+        "section": "typography",
+        "body": "Monospace marks code, identifiers, and machine output. It is never used to make a product surface look technical."
+      },
+      {
+        "name": "The Measure Rule",
+        "section": "typography",
+        "body": "Prose is capped at 68ch, a section note at 70ch, a heading at 16–19ch."
+      },
+      {
+        "name": "The Flat Rule",
+        "section": "elevation",
+        "body": "No box-shadow on any surface, in any state. A hover changes a fill or a rule’s colour; it never lifts anything."
+      },
+      {
+        "name": "The Rules-Not-Cards Rule",
+        "section": "shapes",
+        "body": "There are no cards in a 家計簿. A grouping is a ruled band with its heading sitting on the rule. Nothing on a product surface draws a border on all four sides, and nested containers do not exist."
+      },
+      {
+        "name": "The Same-Component Rule",
+        "section": "components",
+        "body": "The landing's recorded demo is built from the exact components the live page uses. If the demo drew its own rules, the first thing a visitor would notice on reaching /chat is that the demo was a different product."
+      }
+    ],
+    "dos": [
+      "Do divide with rules. A grouping is a 1px sumi rule with its heading sitting on it.",
+      "Do give every amount .num and align it to a column.",
+      "Do spend colour only on a write, an overrun, an anomaly, or an error — and always with a word beside it, never colour alone.",
+      "Do re-place cells explicitly with col-start / row-start at narrow widths, and check that the figure still hangs on the row’s right rule.",
+      "Do set the serif for anything stated (headings, questions, figures) and the sans for anything explained.",
+      "Do put the source of a figure next to it.",
+      "Do use the double rule (4px double) for a total, and only for a total."
+    ],
+    "donts": [
+      "Don’t add an accent colour.",
+      "Don’t draw a card, a panel, or any four-sided border on a product surface.",
+      "Don’t add a box-shadow. The system is flat on both grounds.",
+      "Don’t round a corner. Square is the system value; the only radius is a 3px bar cap.",
+      "Don’t reintroduce a tiled 方眼 grid-paper background.",
+      "Don’t animate content into existence. Animate from an already-visible default.",
+      "Don’t colour a success.",
+      "Don’t mix the two grounds on one surface, and don’t soften the seam between them.",
+      "Don’t print a truncated machine payload as if it were a summary. Say something derived from it, or say nothing."
+    ]
+  }
+}
