@@ -93,7 +93,8 @@ export async function adminOwnerId(session: AdminSession): Promise<string | unde
 const DAYS = 30
 
 /**
- * "Today", as a UTC calendar date.
+ * Midnight at the start of today, UTC — as a `timestamptz` *instant*, not a
+ * `date`.
  *
  * The database's session timezone is not guaranteed to be UTC — it is
  * whatever the Postgres server was initialised with, which on at least one
@@ -102,10 +103,19 @@ const DAYS = 30
  * bucketing rows with a bare `current_date` would silently misfile the last
  * few hours of the UTC day into the wrong bucket, or off the end of the
  * sparkline entirely, whenever the two clocks disagree about what day it is.
- * Pinning both sides to UTC explicitly removes the dependency on the server's
- * configured zone.
+ *
+ * A `date` is not enough on its own: comparing it against the `timestamptz`
+ * column `trace_runs.started_at` forces an implicit cast back to
+ * `timestamptz`, and that cast applies the *session* timezone again — so
+ * `(now() at time zone 'utc')::date` alone still produces a bound that sits
+ * off by the session's UTC offset. Converting through a naive `timestamp`
+ * and back with an explicit `at time zone 'utc'` fixes the instant in place
+ * regardless of the session's configured zone.
  */
-const UTC_TODAY = sql`(now() at time zone 'utc')::date`
+const UTC_DAY_START = sql`(((now() at time zone 'utc')::date)::timestamp at time zone 'utc')`
+
+/** The start of the current UTC month, as the same kind of pinned instant. */
+const UTC_MONTH_START = sql`(date_trunc('month', (now() at time zone 'utc'))::timestamp at time zone 'utc')`
 
 export interface BudgetPanel {
   todayUsd: number
@@ -142,7 +152,7 @@ export async function budgetPanel(_session: AdminSession): Promise<BudgetPanel> 
       usd: sql<string>`coalesce(sum(${traceRuns.costUsdEst}), 0)`,
     })
     .from(traceRuns)
-    .where(gte(traceRuns.startedAt, sql`${UTC_TODAY} - ${DAYS - 1} * interval '1 day'`))
+    .where(gte(traceRuns.startedAt, sql`${UTC_DAY_START} - ${DAYS - 1} * interval '1 day'`))
     .groupBy(sql`1`)
 
   const byDay = new Map(rows.map((row) => [row.day, Number(row.usd)]))
@@ -161,7 +171,7 @@ export async function budgetPanel(_session: AdminSession): Promise<BudgetPanel> 
   const [monthRow] = await db
     .select({ usd: sql<string>`coalesce(sum(${traceRuns.costUsdEst}), 0)` })
     .from(traceRuns)
-    .where(gte(traceRuns.startedAt, sql`date_trunc('month', ${UTC_TODAY})`))
+    .where(gte(traceRuns.startedAt, UTC_MONTH_START))
 
   const todayUsd = sparkline.at(-1)?.usd ?? 0
   const monthToDateUsd = Number(monthRow?.usd ?? 0)

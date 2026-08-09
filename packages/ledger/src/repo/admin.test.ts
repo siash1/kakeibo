@@ -61,6 +61,7 @@ function session(): AdminSession {
 
 const alice = asOwnerId('00000000-0000-4000-8000-0000000ad001')
 const bob = asOwnerId('00000000-0000-4000-8000-0000000ad002')
+const leaked = asOwnerId('00000000-0000-4000-8000-0000000ad005')
 
 /** A finished run, backdated, so the day buckets can be tested at all. */
 async function runOn(owner: OwnerId, daysAgo: number, costUsd: number): Promise<void> {
@@ -88,7 +89,7 @@ describe('budgetPanel', () => {
   let todayBefore = 0
 
   beforeAll(async () => {
-    await resetOwners(alice, bob)
+    await resetOwners(alice, bob, leaked)
     todayBefore = (await budgetPanel(session())).todayUsd
     await runOn(alice, 0, 0.01)
     await runOn(alice, 0, 0.02)
@@ -97,7 +98,7 @@ describe('budgetPanel', () => {
   }, 60_000)
 
   afterAll(async () => {
-    await resetOwners(alice, bob)
+    await resetOwners(alice, bob, leaked)
   })
 
   afterEach(() => {
@@ -135,6 +136,25 @@ describe('budgetPanel', () => {
     process.env.GLOBAL_DAILY_BUDGET_USD = '0.001'
     resetEnvCache()
     expect((await budgetPanel(session())).state).toBe('tripped')
+  })
+
+  it('excludes the last hour of the previous UTC month from month-to-date', async () => {
+    // A bound built from `current_date` (or a bare UTC `::date` compared
+    // against a `timestamptz` column) sits up to a session-timezone's worth of
+    // hours before the true UTC month start. This row sits exactly in that
+    // leaked window: real cost, wrong month.
+    const before = await budgetPanel(session())
+    await adminDb().insert(traceRuns).values({
+      ownerId: leaked,
+      provider: 'test',
+      model: 'test',
+      channel: 'web',
+      status: 'ok',
+      costUsdEst: '1.000000',
+      startedAt: sql`(date_trunc('month', (now() at time zone 'utc'))::timestamp at time zone 'utc') - interval '1 hour'`,
+    })
+    const after = await budgetPanel(session())
+    expect(after.monthToDateUsd).toBeCloseTo(before.monthToDateUsd, 6)
   })
 })
 
