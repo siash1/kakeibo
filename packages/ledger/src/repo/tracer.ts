@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import type { Channel } from '@kakeibo/core/registry'
 import type { RunFinish, TraceEventInput, TraceRunHandle, Tracer } from '@kakeibo/core/trace'
-import { and, desc, eq } from 'drizzle-orm'
+import { and, desc, eq, sql } from 'drizzle-orm'
 import { withOwner } from '../db'
 import type { OwnerId } from '../owner'
 import { traceEvents, traceRuns } from '../schema'
@@ -35,8 +35,31 @@ export class DbTracer implements Tracer {
         channel: info.channel,
       }),
     )
+    return this.handle(id, 0)
+  }
 
-    let seq = 0
+  /**
+   * Reopens an existing run so a suspended turn continues one trace.
+   *
+   * The sequence continues from what is already stored rather than restarting
+   * at zero: two events sharing seq 0 sort ambiguously, and the timeline sorts
+   * on exactly that column.
+   */
+  async resumeRun(runId: string): Promise<TraceRunHandle> {
+    const owner = this.owner
+    const rows = await withOwner(owner, (tx) =>
+      tx
+        .select({ maxSeq: sql<number>`coalesce(max(${traceEvents.seq}), -1)::int` })
+        .from(traceEvents)
+        .where(and(eq(traceEvents.ownerId, owner), eq(traceEvents.runId, runId))),
+    )
+    return this.handle(runId, Number(rows[0]?.maxSeq ?? -1) + 1)
+  }
+
+  /** The event and finish logic, shared so start and resume cannot drift. */
+  private handle(id: string, startSeq: number): TraceRunHandle {
+    const owner = this.owner
+    let seq = startSeq
     return {
       id,
       event: async (input: TraceEventInput) => {

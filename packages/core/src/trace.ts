@@ -46,6 +46,14 @@ export interface TraceRunHandle {
 
 export interface Tracer {
   startRun(info: { provider: string; model: string; channel: Channel }): Promise<TraceRunHandle>
+  /**
+   * Reopens an existing run so a suspended turn continues one trace.
+   *
+   * Without it a turn that paused for a confirmation produces two runs: the
+   * viewer shows half a conversation twice, and the per-owner quota counts one
+   * turn as two.
+   */
+  resumeRun(runId: string): Promise<TraceRunHandle>
 }
 
 /** Keeps runs in memory. Used by unit tests and by the MCP server, which has no run of its own. */
@@ -80,6 +88,22 @@ export class InMemoryTracer implements Tracer {
     }
   }
 
+  async resumeRun(runId: string): Promise<TraceRunHandle> {
+    const run = this.runs.find((r) => r.id === runId)
+    if (!run) throw new Error(`No run ${runId} to resume`)
+    // Continue the sequence rather than restarting it; the timeline sorts on it.
+    let seq = run.events.length
+    return {
+      id: runId,
+      event: async (input) => {
+        run.events.push({ id: randomUUID(), runId, seq: seq++, ...input })
+      },
+      finish: async (result) => {
+        Object.assign(run, { finish: result })
+      },
+    }
+  }
+
   eventsOfType(type: TraceEventType): TraceEventRecord[] {
     return this.runs.flatMap((r) => r.events).filter((e) => e.type === type)
   }
@@ -92,11 +116,15 @@ export class InMemoryTracer implements Tracer {
 /** Discards everything. Only for benchmarks where tracing itself is the thing being measured. */
 export class NoopTracer implements Tracer {
   async startRun(): Promise<TraceRunHandle> {
-    return {
-      id: randomUUID(),
-      event: async () => {},
-      finish: async () => {},
-    }
+    return this.handle(randomUUID())
+  }
+
+  async resumeRun(runId: string): Promise<TraceRunHandle> {
+    return this.handle(runId)
+  }
+
+  private handle(id: string): TraceRunHandle {
+    return { id, event: async () => {}, finish: async () => {} }
   }
 }
 
