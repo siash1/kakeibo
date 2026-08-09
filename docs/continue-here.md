@@ -9,8 +9,13 @@ or just say: **"Read docs/continue-here.md and start."**
 
 kakeibo is a from-scratch Gemini agent over a double-entry ledger, live at
 `github.com/siash1/kakeibo`. It is being taken public in four plans plus a UI
-phase. **Plans A, B and C and the whole of Phase 2 are merged to `main`. Plan D
-is written and not started — start there.**
+phase. **Plans A, B and C, the whole of Phase 2, and now Plan D are all
+written and built.** Plans A–C and Phase 2 are on `main`; **Plan D is built and
+green on the `plan-d` branch and has not been merged.**
+
+What is left is not code. It is the deploy itself, which needs accounts only
+the owner can create — Neon, Vercel, Cloudflare — and follows
+**`docs/deploy.md`**, whose two orderings are the load-bearing part of it.
 
 **Read first, in this order:**
 
@@ -30,11 +35,13 @@ is written and not started — start there.**
    the end of Phase 2. PRODUCT.md is the thing to argue with, not around;
    DESIGN.md describes what shipped, so if it and the code disagree, the code
    is the bug or the doc is stale and one of them gets fixed.
-5. `docs/superpowers/plans/2026-08-10-public-launch-surfaces-and-deploy.md` —
-   **Plan D, the work that is next.** Read its "Out of scope" block before its
-   tasks; the owner cut sign-up and `/settings` after the design spec was
-   written, and Task 1 exists to reconcile the two.
-6. `docs/superpowers/plans/2026-08-09-auth-and-serverless-readiness.md` (Plan B)
+5. `docs/deploy.md` — **the runbook, and the work that is next.** Two orderings
+   and a table of variables. Written by Plan D, never yet executed.
+6. `docs/superpowers/plans/2026-08-10-public-launch-surfaces-and-deploy.md` —
+   Plan D, now built. Its "Out of scope" block is still the record of what the
+   owner cut. Four of its task briefs were wrong in ways worth knowing about;
+   see "What Plan D actually did" below.
+7. `docs/superpowers/plans/2026-08-09-auth-and-serverless-readiness.md` (Plan B)
    and `docs/superpowers/plans/2026-08-09-operator-dashboard.md` (Plan C), each
    with its **"What actually happened"** section. Nearly every task in Plan C
    found a defect in its own brief; the record says what and why.
@@ -92,14 +99,10 @@ Four things Phase 2 fixed that were not UI:
 The four owner decisions from the Phase 2 direction round are in the decided
 table at the bottom. The no-accent one is still the load-bearing one.
 
-### Next: Plan D, written and ready to execute
+### Plan D — built, green, unmerged
 
-`docs/superpowers/plans/2026-08-10-public-launch-surfaces-and-deploy.md` — ten
-tasks, fifty-four steps, every one with the code in it. Execute with
-`/subagent-driven-development` (a fresh agent per task, review between) or
-`/executing-plans`.
-
-**The owner cut sign-up entirely on 2026-08-10.** Plan D's scope is therefore:
+Branch `plan-d`, worktree `.worktrees/plan-d`, eleven commits on top of `main`.
+**The owner cut sign-up entirely on 2026-08-10**, so the scope was:
 
 | In | Out |
 | --- | --- |
@@ -107,12 +110,7 @@ tasks, fifty-four steps, every one with the code in it. Execute with
 | `/privacy`, including a delete-everything control | `/settings` |
 | `/terms` | Google OAuth |
 | Turnstile in front of `/api/chat` | |
-| The Vercel + Neon deploy | |
-
-Task 1 amends the design spec **before** anything is built against the opposite:
-§7 still lists `/settings` and §1 still says an account is how you persist.
-Neither is true any more, and code that silently contradicts its own spec reads
-as a bug to the next person.
+| The Vercel + Neon deploy | *(the code half is done; the accounts are the owner's)* |
 
 Three consequences of the cut, so nobody rediscovers them:
 
@@ -123,39 +121,65 @@ Three consequences of the cut, so nobody rediscovers them:
 - `repointOwner` is *not* dead code: signing in as operator while holding an
   anonymous session still fires the link hook and repoints that ledger.
 
-**A worktree is already set up and green:** `.worktrees/plan-d` on branch
-`plan-d`, branched from `main`, dependencies installed, `.env` copied, baseline
-236 + 15 passing.
+### What Plan D actually did, where it differed from its brief
 
-Task 10 needs the owner and says so — see "What needs the owner" below. Its
-ordering section is the load-bearing part of the whole plan.
+The pattern from Plan C held: **four of the ten task briefs were wrong**, and in
+each case the codebase was right.
+
+- **Task 3 asked for a `deleteAccount` in `link.ts`. It already existed** as
+  `deleteUser` in `repo/users.ts`, already exported from the barrel. Writing the
+  second one would have been the parallel deletion path the plan's own
+  self-review rejected. What was missing was the *proof*: `link.test.ts` now
+  seeds a row in every one of the twelve owner-scoped tables — derived from the
+  schema, not listed — and asserts they all vanish with the user row and the
+  neighbour's all survive. A new owner-scoped table arriving without its cascade
+  now fails there instead of making `/privacy` quietly false.
+- **Task 9 would have shipped a Turnstile gate that 403s every turn after the
+  first.** The brief renders the widget inside `Opening`, which unmounts as soon
+  as a question is asked — and a Turnstile token is single-use. The widget lives
+  above the composer for the life of the page instead, in `interaction-only`
+  mode so it takes no space, and the page drops the spent token and asks for
+  another as each turn ends. Verified in a real browser with Cloudflare's
+  always-passes test keys: two consecutive live turns, both 200.
+- **Task 8's tests would have passed while proving nothing.** `env()` memoises,
+  so without `resetEnvCache()` the first call freezes an empty secret and every
+  "once configured" case silently exercises the unconfigured path. The brief
+  noted this as a possibility; it is a certainty.
+- **Task 4's endpoint and Task 10's runbook were right** and went in close to as
+  written.
+
+**One thing was found that was not in the plan at all, and it was a launch
+blocker.** See "The import path was an arbitrary file read" below.
+
+### The gate, now
+
+`pnpm lint`, `pnpm typecheck`, **245 tests across 32 files plus the 15-test
+second isolation pass**, `pnpm --filter @kakeibo/web build`,
+`pnpm injection:report` at 100%, and
+`node ~/.claude/skills/impeccable/scripts/detect.mjs --json <targets>` at zero
+findings. All green on `plan-d` as of 2026-08-10.
 
 ## Start here
 
 ```bash
 pnpm install
 pnpm db:up && pnpm db:migrate && pnpm db:seed
-pnpm test                       # expect 236 + 15, all green
+pnpm test                       # expect 245 + 15 on plan-d, 236 + 15 on main
 ```
 
-To pick up Plan D:
+To work on Plan D's branch:
 
 ```bash
 cd .worktrees/plan-d            # already exists; if not:
-                                #   git worktree add .worktrees/plan-d -b plan-d main
+                                #   git worktree add .worktrees/plan-d plan-d
 pnpm install && cp ../../.env .env
 PORT=3100 BETTER_AUTH_URL=http://localhost:3100 pnpm dev
 ```
 
-`.worktrees/ui-overhaul` and `.worktrees/operator-dashboard` are both merged and
-are now only a way to serve a stale copy of the app by accident. Remove them
-when convenient:
-
-```bash
-git worktree remove .worktrees/ui-overhaul
-git worktree remove .worktrees/operator-dashboard
-git branch -d ui-overhaul operator-dashboard
-```
+To exercise the Turnstile gate locally, add Cloudflare's documented test keys —
+site `1x00000000000000000000AA`, secret `1x0000000000000000000000000000000AA` —
+to that command. Both empty is the normal state and turns the gate off on the
+server and the client at once.
 
 **Put worktrees in `.worktrees/`, never in `.claude/worktrees/`.** The harness's
 own worktree tool defaults to the latter, and `biome.json` excludes `**/.claude`
@@ -182,7 +206,7 @@ update "user" set email_verified = true where email = '<your address>';
 ## How to work
 
 The project skills in `.claude/skills/` are used at the step they are named
-for: `/writing-plans` for Plan D, `/using-git-worktrees` to isolate,
+for: `/writing-plans` to plan, `/using-git-worktrees` to isolate,
 `/executing-plans` or `/subagent-driven-development` to implement,
 `/verification-before-completion` before claiming anything is done, and
 `/finishing-a-development-branch` to land it. `/impeccable` owns UI work; its
@@ -198,15 +222,83 @@ habits worth keeping:
 - **Run the full gate yourself before each review.** One implementer reported
   green on a 119-test subset while the full suite failed 8 — and the failure
   was that its own change truncated the seeded ledger on every test run.
-- **Hand briefs over as files, and treat their code as a draft to verify.**
+- **Hand briefs over as files, and treat their code as a draft to verify.** Plan
+  D held to the pattern: four of its ten briefs were wrong, and the codebase was
+  right every time.
 - **Look at the thing.** Phase 2's worst two defects — a dashboard figure that
   had been wrong on every month since it shipped, and a landing page with a
   hole in the middle of it — were both invisible to tests, to typecheck and to
-  HTML assertions, and both were obvious in a screenshot.
+  HTML assertions, and both were obvious in a screenshot. Plan D found four more
+  the same way, on pages that had already passed lint, typecheck and the
+  detector.
+- **Check the claims a page makes against the code that would have to be true.**
+  The one live vulnerability in this repo was found by asking whether `/privacy`
+  could honestly say a visitor may upload a statement. No test was ever going to
+  ask that.
 
 ## Things that cost time to learn — do not rediscover them
 
+**The import path was an arbitrary file read, and it is the one thing on this
+list that was a live vulnerability rather than a lost afternoon.**
+
+`import_statement_csv` takes a path from the model, which takes it from whoever
+is talking to the model — on the public site, an anonymous visitor.
+`resolvePath` passed absolute paths through untouched, and the dry-run preview
+returns `parseErrors[].raw`, which is the literal text of every line the CSV
+parser could not read. `/api/chat` serves the full registry. Those three facts
+compose: *"import /proc/self/environ, dry run"*, the visitor confirms their own
+write gate, and `DATABASE_URL`, `BETTER_AUTH_SECRET`, `CRON_SECRET` and the
+Gemini credentials come back as unparseable rows. It was found while checking
+what `/privacy` could honestly claim, not by a test.
+
+`packages/ledger/src/tools/import-path.ts` now confines every read to `data/` —
+already the repo's convention (`data/seed/` for the corpus, `data/private/` for
+anything real), so no existing caller changed. The refusal happens before any
+filesystem access, so it cannot double as an existence oracle, and
+`import-path.test.ts` pins both halves.
+
+**The tool's schema wording was deliberately left alone.** Every string in a
+tool schema is inside the explicitly cached prefix that the replay fixtures hash
+over, so editing the `path` description would make `pnpm test` miss until the
+fixtures are re-recorded against a live model. A behaviour change is free; an
+interface change costs an API key and a recording run.
+
+**A Turnstile token is single-use.** Cloudflare rejects a replay as
+`timeout-or-duplicate`. Any widget that issues one token and is never reset
+gates the first turn and 403s every turn after it — and the failure looks like
+the site breaking on the second question only, which is a horrible thing to
+debug. The widget stays mounted beside the composer, the page discards the spent
+token in the `finally` of each turn and bumps a `refreshKey`, and the composer
+waits on the new one rather than sending without it.
+
+Cloudflare's test keys (`1x00000000000000000000AA` /
+`1x0000000000000000000000000000000AA`) always pass **and always return the same
+constant token string**, so a local test cannot prove freshness by comparing
+values. What it can prove is that the widget's callback fired again: the turn
+clears the held token before it clears `busy`, so the submit button can only
+become enabled again after a second callback.
+
 **Looking at the UI.**
+
+- **A heavy header rule directly above a `Section` is two rules doing one job.**
+  Every incumbent paper page puts something — a band of figures, a margin rail,
+  an empty state — between its `border-b border-sumi-900` header and the first
+  section's `border-t border-sumi-900`. `/privacy` and `/terms` did not, and the
+  result was two sumi rules 56px apart with nothing between them. Invisible to
+  the detector; obvious in a full-page capture.
+- **Tailwind's reset removes list markers, so a `<ul>` reads as loose
+  paragraphs.** In this system a list is ruled rows, which is also what the
+  ledger's own rows are.
+- **Preflight sets `text-decoration: inherit` on anchors**, so the paper-link
+  rule in `globals.css` has never had an underline to offset and every inline
+  link on the site renders `text-decoration-line: none`. On a site with no
+  accent colour that makes an inline link in body-coloured prose invisible. The
+  two new pages underline explicitly; the dead global rule and the four existing
+  pages it would change were left for a change that can look at all of them.
+- **The detector does not enforce the named rules in DESIGN.md.** It returned
+  `[]` on a `<Mark tone="ok">deleted</Mark>` that directly contradicted the
+  Nothing-Is-Green-When-It-Is-Fine rule. The detector checks tokens; the rules
+  need a reader.
 
 - **A screenshot is evidence; a full-page screenshot is evidence about a
   document, not about a viewport.** `position: sticky` renders at its scroll-0
@@ -453,25 +545,51 @@ in `packages/ledger/src/repo/admin.ts` are deliberately absent from the
 isolation suite. They read across owners on purpose, which is what
 `packages/ledger/src/admin-containment.test.ts` exists to bound instead.
 
+**`/privacy` and `/terms` are linked from the landing footer only.** No
+site-wide footer exists, so a visitor on `/chat` or `/dashboard` reaches the
+delete control by going back to `/`. Plan D's steps specified the landing footer
+and nothing else; a shared footer in the paper layout would touch four reviewed
+pages and `/chat`'s sticky-composer geometry, which is a change that deserves
+its own look rather than a drive-by.
+
+**`/privacy` says a visitor may import a real statement. There is no upload in
+the web app** — `import_statement_csv` reads a server-side path, now confined to
+`data/`, and no page offers a file input. The owner was shown this and chose to
+keep the section (2026-08-10); the landing carries the same claim and predates
+Plan D. It is the one sentence on the site that a script cannot reproduce. If a
+real upload is ever wanted, it is a new tool that takes CSV *text*, not a path.
+
 ## What needs the owner, not the agent
+
+**Everything below is now written down in `docs/deploy.md`**, which is the
+document to work from. This section is the why; that one is the steps.
+
+**Merging `plan-d`.** It has not been merged or pushed. Eleven commits, gate
+green, no AI trailers.
 
 **Google OAuth credentials.** Email/password and anonymous sign-in work with no
 external setup, and the Google button stays hidden while `GOOGLE_CLIENT_ID` is
 empty. Google needs a client ID and secret from the GCP console (same project as
 Gemini), with redirect URI `http://localhost:3000/api/auth/callback/google`
-locally and the deployed origin in production. Ask for them when Plan D
-deploys.
+locally and the deployed origin in production. It is not required for the
+deploy — with sign-up cut it has no visitor to serve — but it is the better
+long-term answer to the `email_verified` problem below.
 
-**Anything Plan D needs**: a Neon database, a Vercel project, a Cloudflare
-Turnstile site (both keys — the site key is public and also goes in
+**The accounts**: a Neon database, a Vercel project, a Cloudflare Turnstile site
+(both keys — the site key is public and also goes in
 `NEXT_PUBLIC_TURNSTILE_SITE_KEY`). All of them are account creation, which the
-owner does. Plan D Task 10 lists every variable and its value.
+owner does. `docs/deploy.md` lists every variable and its value.
 
 **The Neon step has an order.** Create the project, then create the `app_user`
 role, *then* migrate. `scripts/db-up.sh` only creates the role; the grants live
 in the migration `packages/ledger/drizzle/0002_rls.sql`, which does
 `GRANT ... TO app_user` and fails outright if the role does not exist yet. And
 if `APP_DATABASE_URL` ends up empty, row-level security is silently inert.
+
+**`CRON_SECRET` in production.** Empty disables the bearer check on
+`/api/cron/reap`, which deletes rows. Vercel generates one; set it. Without the
+cron running at all, nothing enforces the 24-hour retention the privacy page
+promises.
 
 **`RATE_LIMIT_SALT` in production.** It defaults to empty, which is fine
 locally. Empty in production makes the stored per-IP hashes a plain
@@ -539,6 +657,18 @@ From the design spec, answered by the owner:
 | Admin | Single-operator dashboard at `/admin`, email allowlist |
 | Visitor map | Coarse city-level from request IP, no browser prompt |
 
+Amended by the owner on 2026-08-10, and carried into the design spec by Plan D
+Task 1: **there is no sign-up**, so the entry row's second half no longer holds
+and `/settings` is gone. The upload row survives as an intention rather than a
+description — see "Known and deliberately left".
+
+Decided during Plan D, 2026-08-10:
+
+| Question | Answer |
+| --- | --- |
+| The unsandboxed import file read | Confine `resolvePath` to `data/`, with a test. Keeps all twelve tools everywhere and fixes it for every caller at once |
+| What `/privacy` says about uploads | Keep the section as written, even though the web app has no upload |
+
 Decided during Plan B, and worth the same treatment:
 
 | Question | Answer |
@@ -576,6 +706,7 @@ inherits that rule literally: every figure on `/` and `/evals` is read out of
 `evals/report/latest.json` or counted off the tool registry at render time, so
 there is no number on the marketing surface that a script cannot reproduce.
 Guardrails are architectural, not prompt-deep: the write gate lives in the loop,
-and the RLS bypass the admin dashboard needs lives in exactly one file, held to
-that by a containment test rather than a comment. `pnpm injection:report` stays
-at 100%. And the commit trail is the owner's — no AI co-author trailers, ever.
+the RLS bypass the admin dashboard needs lives in exactly one file, and the one
+tool that touches the filesystem reads from exactly one directory — each held
+there by a test rather than by a comment. `pnpm injection:report` stays at 100%.
+And the commit trail is the owner's — no AI co-author trailers, ever.
