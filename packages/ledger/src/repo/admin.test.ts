@@ -237,20 +237,31 @@ describe('trafficPanel', () => {
     await resetOwners(erin)
   })
 
-  it('does not count an account created in the leaked band as predating today', async () => {
-    // `user.created_at` is a naive `timestamp` (see auth-schema.ts), written as
-    // the session-tz wall clock at insert time. A value of "today, 02:00" in
-    // that naive column is *not* before Kolkata midnight (old bound: not
-    // returning-eligible) but its real instant — 2026-08-08T20:30Z, reinterpreting
-    // the naive value in the session's own tz — *is* before UTC midnight (new
-    // bound: returning-eligible once they also have a run this week). The two
-    // bounds disagree, which is exactly what pins the fix down.
+  it('counts an account created before today in UTC as returning', async () => {
+    // `user.created_at` is a naive `timestamp` (see auth-schema.ts): it stores
+    // the session-tz wall clock, so reading it back means reinterpreting it in
+    // whatever zone the session is now in.
+    //
+    // The fixture is therefore written as the wall clock *of a chosen instant*
+    // — two hours before today's UTC midnight — rather than as a literal like
+    // `current_date + interval '2 hours'`. A literal only lands before UTC
+    // midnight when the session sits east of Greenwich; written this way the
+    // account predates today in every zone, which is what the assertion below
+    // actually claims.
+    //
+    // Honest limit, and the reason the original was written the other way: this
+    // still *discriminates* the fixed bound from the old one only east of UTC.
+    // On a UTC database (CI, and Neon in production) the old naive comparison
+    // happens to agree, so the test guards the behaviour everywhere but would
+    // not by itself have caught the original bug there.
     const frank = asOwnerId('00000000-0000-4000-8000-0000000ad007')
     await resetOwners(frank)
     const before = await trafficPanel(session())
     await adminDb()
       .update(user)
-      .set({ createdAt: sql`current_date + interval '2 hours'` })
+      .set({
+        createdAt: sql`((((now() at time zone 'utc')::date)::timestamp at time zone 'utc') - interval '2 hours') at time zone current_setting('timezone')`,
+      })
       .where(eq(user.id, frank))
     await runOn(frank, 0, 0.001)
     const after = await trafficPanel(session())
