@@ -291,6 +291,23 @@ export const suspendedTurns = pgTable(
   ],
 )
 
+/**
+ * The per-IP message counter (spec §5, layer 2).
+ *
+ * The only new table that is deliberately NOT owner-scoped, and the only one
+ * with no RLS policy: its whole job is to survive a visitor clearing their
+ * cookies and minting a fresh anonymous user, which is precisely a change of
+ * owner. Scoping it by owner would defeat it.
+ *
+ * The key is `sha256(ip + RATE_LIMIT_SALT + date)`, so no raw address is ever
+ * stored and yesterday's keys cannot be correlated with today's.
+ */
+export const rateLimits = pgTable('rate_limits', {
+  key: text('key').primaryKey(),
+  windowStart: date('window_start').notNull(),
+  count: integer('count').notNull().default(0),
+})
+
 export type Account = typeof accounts.$inferSelect
 export type Transaction = typeof transactions.$inferSelect
 export type Posting = typeof postings.$inferSelect
@@ -303,3 +320,4 @@ export type TraceEvent = typeof traceEvents.$inferSelect
 export type Conversation = typeof conversations.$inferSelect
 export type ConversationMessage = typeof conversationMessages.$inferSelect
 export type SuspendedTurnRow = typeof suspendedTurns.$inferSelect
+export type RateLimit = typeof rateLimits.$inferSelect

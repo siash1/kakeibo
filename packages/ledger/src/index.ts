@@ -50,6 +50,14 @@ export {
   repointOwner,
 } from './repo/link'
 export {
+  consumeQuota,
+  hashIp,
+  messagesToday,
+  type QuotaReason,
+  type QuotaVerdict,
+  spendToday,
+} from './repo/quota'
+export {
   type Anomaly,
   budgetStatus,
   detectRecurring,
