@@ -44,6 +44,12 @@ const EnvSchema = z.object({
   APP_DATABASE_URL: z.string().default(''),
   CONTEXT_BUDGET_TOKENS: z.coerce.number().int().positive().default(60_000),
   ALLOW_WRITES: boolish.default(false),
+  /**
+   * Lets `db:reset` and the eval harness truncate a database that is not
+   * localhost. Off by default; the only reason to turn it on is a deliberate
+   * reset of a hosted development database.
+   */
+  ALLOW_DESTRUCTIVE_RESET: boolish.default(false),
   PORT: z.coerce.number().int().default(3000),
 
   /**

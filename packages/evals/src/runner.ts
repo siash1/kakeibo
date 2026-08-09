@@ -24,6 +24,7 @@ import {
 } from '@kakeibo/ledger'
 import { sql } from 'drizzle-orm'
 import { parse as parseYaml } from 'yaml'
+import { assertResettable } from '../../ledger/src/scripts/reset'
 import { isJudge, runCheck } from './checks'
 import { type EvalReport, type Task, type TaskResult, TaskSchema } from './types'
 
@@ -84,6 +85,7 @@ export function loadTasks(filter?: string): Task[] {
 }
 
 export async function resetAndSeed(): Promise<void> {
+  assertResettable(env().DATABASE_URL, env().ALLOW_DESTRUCTIVE_RESET)
   await getDb().execute(
     sql`truncate table trace_events, trace_runs, postings, transactions, import_batches, budgets, rules, memories, accounts restart identity cascade`,
   )
