@@ -21,7 +21,7 @@ import {
   trafficPanel,
   usersPanel,
 } from './admin'
-import { consumeQuota } from './quota'
+import { consumeQuota, messagesToday } from './quota'
 
 function allowlist(value: string): void {
   process.env.ADMIN_EMAILS = value
@@ -719,5 +719,34 @@ describe('operator actions', () => {
     // Who did it, to whom, and what changed. An audit entry that does not say
     // who is a note to nobody.
     expect(blocked?.by).toBe('operator@example.com')
+  })
+
+  it('does not cost the visitor a message off their daily cap to block and unblock them', async () => {
+    // audit() writes a real trace_runs row for the target so the intervention
+    // lands in their own timeline; messagesToday counts trace_runs rows for
+    // that owner today with no other filter, and consumeQuota reads it to
+    // enforce the per-owner cap. Unfiltered, restoring access would silently
+    // spend one of the visitor's own messages doing it - the opposite of the
+    // intent - and a repeated click would spend another.
+    const before = await messagesToday(bob)
+    await blockOwner(session(), bob, true)
+    await blockOwner(session(), bob, false)
+    expect(await messagesToday(bob)).toBe(before)
+  })
+
+  it('blocking an owner who no longer exists is a no-op, not a thrown error', async () => {
+    // A reaped anonymous visitor: the operator's own page can still be
+    // showing an id "user" no longer has. The update finds nothing to change,
+    // and auditing it anyway would insert a trace_runs row against a foreign
+    // key "user" cannot satisfy - throwing exactly where the update quietly
+    // did not. The task-9 UI will be able to reach this with a stale id, so
+    // it must not 500.
+    const ghost = asOwnerId('00000000-0000-4000-8000-0000000ad099')
+    await expect(blockOwner(session(), ghost, true)).resolves.toBeUndefined()
+    const rows = await adminDb()
+      .select({ id: traceRuns.id })
+      .from(traceRuns)
+      .where(eq(traceRuns.ownerId, ghost))
+    expect(rows).toHaveLength(0)
   })
 })

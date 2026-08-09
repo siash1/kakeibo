@@ -118,6 +118,27 @@ const UTC_DAY_START = sql`(((now() at time zone 'utc')::date)::timestamp at time
 /** The start of the current UTC month, as the same kind of pinned instant. */
 const UTC_MONTH_START = sql`(date_trunc('month', (now() at time zone 'utc'))::timestamp at time zone 'utc')`
 
+/**
+ * True for a `trace_runs` row that is a visitor's own turn, false for the
+ * synthetic row `audit()` (near the bottom of this file) writes for every
+ * operator action.
+ *
+ * That synthetic row is real activity in `recentRuns` — the whole reason an
+ * intervention lives in `trace_events` rather than a side log is that it
+ * belongs in the same timeline as everything else, and the run list is that
+ * timeline — but it is not a message anyone sent. Everywhere else a run is
+ * counted, timed or costed as *visitor* activity, it has to be excluded, or
+ * an operator's block/unblock click quietly counts against the very quota it
+ * exists to override, drags a latency percentile down with a row that made
+ * no model call, or shows up as usage on `usersPanel` — whose entire purpose
+ * is making abuse visible, not moderation clicks.
+ *
+ * `provider: 'operator'` is the filter rather than `channel: 'mcp'` because a
+ * real MCP turn also uses that channel; `provider` is `'gemini'` (see
+ * `packages/core/src/gemini/adapter.ts`) for every turn that isn't this one.
+ */
+const IS_VISITOR_RUN = sql`${traceRuns.provider} <> 'operator'`
+
 export interface BudgetPanel {
   todayUsd: number
   monthToDateUsd: number
@@ -217,7 +238,12 @@ export async function trafficPanel(_session: AdminSession): Promise<TrafficPanel
     const [row] = await db
       .select({ n: countDistinct(traceRuns.ownerId) })
       .from(traceRuns)
-      .where(gte(traceRuns.startedAt, sql`${UTC_DAY_START} - ${days} * interval '1 day'`))
+      .where(
+        and(
+          gte(traceRuns.startedAt, sql`${UTC_DAY_START} - ${days} * interval '1 day'`),
+          IS_VISITOR_RUN,
+        ),
+      )
     return Number(row?.n ?? 0)
   }
 
@@ -226,7 +252,10 @@ export async function trafficPanel(_session: AdminSession): Promise<TrafficPanel
   // agree by construction (`anonymous + signedIn === visitors.d30`): a signed-in
   // account that never came back would inflate a raw table count without ever
   // being a visitor, and the same window as `active(DAYS)` is what keeps the
-  // two numbers describing the same set of people.
+  // two numbers describing the same set of people. `IS_VISITOR_RUN` matters
+  // here for that same construction: without it, an owner whose only row
+  // today is an operator's audit entry would count on this side of the split
+  // but not in `active(DAYS)`, and the invariant would break.
   const [kinds] = await db
     .select({
       anonymous: sql<string>`count(distinct ${traceRuns.ownerId}) filter (where ${user.isAnonymous} is true)`,
@@ -234,7 +263,12 @@ export async function trafficPanel(_session: AdminSession): Promise<TrafficPanel
     })
     .from(traceRuns)
     .innerJoin(user, eq(user.id, traceRuns.ownerId))
-    .where(gte(traceRuns.startedAt, sql`${UTC_DAY_START} - ${DAYS} * interval '1 day'`))
+    .where(
+      and(
+        gte(traceRuns.startedAt, sql`${UTC_DAY_START} - ${DAYS} * interval '1 day'`),
+        IS_VISITOR_RUN,
+      ),
+    )
 
   const anonymous = Number(kinds?.anonymous ?? 0)
   const signedIn = Number(kinds?.signedIn ?? 0)
@@ -253,6 +287,7 @@ export async function trafficPanel(_session: AdminSession): Promise<TrafficPanel
     .where(
       and(
         gte(traceRuns.startedAt, sql`${UTC_DAY_START} - 7 * interval '1 day'`),
+        IS_VISITOR_RUN,
         // `user.created_at` is `timestamp` *without* time zone (see
         // auth-schema.ts), so it does not carry the instant it was written at —
         // it carries whatever `now()` looked like once cast into the session's
@@ -339,7 +374,11 @@ export async function healthPanel(_session: AdminSession): Promise<HealthPanel> 
       p95: sql<string>`coalesce(percentile_cont(0.95) within group (order by ${traceRuns.latencyMs}), 0)`,
     })
     .from(traceRuns)
-    .where(gte(traceRuns.startedAt, WINDOW))
+    // IS_VISITOR_RUN: an audit row's status is always 'ok' and its
+    // latency_ms is always the column default, 0 — left in, it would count
+    // as a fast, successful turn nobody actually had and drag the latency
+    // percentiles toward zero.
+    .where(and(gte(traceRuns.startedAt, WINDOW), IS_VISITOR_RUN))
 
   const [tools] = await db
     .select({
@@ -503,6 +542,13 @@ export interface AdminRun {
  * The existing `/runs` table (spec §9.3, item 6), unscoped and widened with an
  * owner column — which is the entire difference between a visitor's own view
  * and the operator's.
+ *
+ * Deliberately not filtered by `IS_VISITOR_RUN`, unlike every panel below
+ * that counts, times or costs a run as visitor activity. The reason the audit
+ * entry is a `trace_runs`/`trace_events` pair rather than a separate log is so
+ * an intervention shows up in the same timeline as everything else, and this
+ * is that timeline — filtering it out here would defeat the entire point of
+ * `audit()`.
  */
 export async function recentRuns(_session: AdminSession, limit = 100): Promise<AdminRun[]> {
   const rows = await unscoped()
@@ -561,6 +607,15 @@ export interface AdminUser {
  * is bounded by `UTC_DAY_START` for the same reason `trafficPanel` was: a
  * bare `current_date` would report "today" in the session's timezone while
  * every other panel on this dashboard means the UTC day.
+ *
+ * `IS_VISITOR_RUN` sits in the join condition rather than in each aggregate,
+ * so a visitor whose only `trace_runs` rows today are operator audit entries
+ * joins to nothing — exactly as if they had not been active — for every
+ * column at once: `messagesToday`, `costUsdToDate` (already zero for an audit
+ * row, but this is where that stops being an accident) and `lastSeenAt`.
+ * `lastSeenAt` matters here as much as the message count: this panel's whole
+ * job is making abuse visible, and a dormant visitor should not look freshly
+ * active because an operator clicked "block" on them.
  */
 export async function usersPanel(_session: AdminSession, limit = 200): Promise<AdminUser[]> {
   const rows = await unscoped()
@@ -575,7 +630,7 @@ export async function usersPanel(_session: AdminSession, limit = 200): Promise<A
       costUsdToDate: sql<string>`coalesce(sum(${traceRuns.costUsdEst}), 0)`,
     })
     .from(user)
-    .leftJoin(traceRuns, eq(traceRuns.ownerId, user.id))
+    .leftJoin(traceRuns, and(eq(traceRuns.ownerId, user.id), IS_VISITOR_RUN))
     .groupBy(user.id)
     // Busiest (most recently active) first. NULLS LAST is not the default for
     // DESC in Postgres — without it, visitors who never ran a turn (whose
@@ -702,10 +757,18 @@ export async function blockOwner(
   ownerId: string,
   blocked: boolean,
 ): Promise<void> {
-  await unscoped()
+  const updated = await unscoped()
     .update(user)
     .set({ blockedAt: blocked ? new Date() : null })
     .where(eq(user.id, ownerId))
+    .returning({ id: user.id })
+  // A stale id — the operator's own page can still be showing a visitor the
+  // nightly reaper has since deleted — makes the update above a silent no-op.
+  // Auditing it anyway would insert a trace_runs row owned by an id "user" no
+  // longer has, and trace_runs.owner_id references "user" — the foreign key
+  // would throw exactly where the update quietly did not. Nothing happened,
+  // so there is nothing to audit.
+  if (updated.length === 0) return
   await audit(session, ownerId, 'block_owner', { blocked })
 }
 

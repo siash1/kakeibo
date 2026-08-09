@@ -83,12 +83,32 @@ function today(): string {
  */
 const UTC_DAY_START = sql`(((now() at time zone 'utc')::date)::timestamp at time zone 'utc')`
 
+/**
+ * True for a `trace_runs` row that is a turn a visitor actually made.
+ *
+ * Duplicated from `admin.ts`'s `IS_VISITOR_RUN` for the same reason
+ * `UTC_DAY_START` above is duplicated rather than imported: `admin.ts` is the
+ * RLS-bypass door, and this is a one-line expression, cheaper to copy than to
+ * give the containment test another module to name.
+ *
+ * It exists here because `admin.ts`'s operator actions (spec §9.4) each write
+ * a synthetic `trace_runs` row, tagged `provider: 'operator'`, so the
+ * intervention has something to hang off in the target's own timeline. That
+ * row must not count as a message: `messagesToday` gates the per-owner daily
+ * cap below, and without this filter, unblocking a visitor — restoring their
+ * access — would silently spend one of their own messages doing it. A second
+ * click (the operator's page is not guaranteed idempotent-proof) spends
+ * another. "Restore this person's access" quietly taking it away is the
+ * opposite of the intent.
+ */
+const IS_VISITOR_RUN = sql`${traceRuns.provider} <> 'operator'`
+
 /** What every owner together has cost so far today, in USD. */
 export async function spendToday(): Promise<number> {
   const [row] = await adminDb()
     .select({ total: sql<string>`coalesce(sum(${traceRuns.costUsdEst}), 0)` })
     .from(traceRuns)
-    .where(gte(traceRuns.startedAt, UTC_DAY_START))
+    .where(and(gte(traceRuns.startedAt, UTC_DAY_START), IS_VISITOR_RUN))
   return Number(row?.total ?? 0)
 }
 
@@ -97,9 +117,12 @@ export async function messagesToday(owner: OwnerId): Promise<number> {
   const [row] = await adminDb()
     .select({ count: sql<string>`count(*)` })
     .from(traceRuns)
-    .where(and(eq(traceRuns.ownerId, owner), gte(traceRuns.startedAt, UTC_DAY_START)))
+    .where(
+      and(eq(traceRuns.ownerId, owner), gte(traceRuns.startedAt, UTC_DAY_START), IS_VISITOR_RUN),
+    )
   // One row per turn, and a suspended turn resumes into the row it already has
   // rather than opening a second — so this counts turns, not halves of them.
+  // Operator audit rows (see IS_VISITOR_RUN) are excluded for the same reason.
   return Number(row?.count ?? 0)
 }
 
