@@ -1,5 +1,4 @@
 import { readFile } from 'node:fs/promises'
-import { isAbsolute, resolve } from 'node:path'
 import { ToolRegistry, type ToolSpec } from '@kakeibo/core/registry'
 import { z } from 'zod'
 import { ALL_CATEGORIES, EXPENSE_CATEGORIES, INCOME_CATEGORIES, UNCATEGORIZED } from '../categories'
@@ -17,6 +16,7 @@ import {
 import { categorizeTransactions, searchTransactions } from '../repo/transactions'
 import { DbMemoryStore, setBudget, setCategoryRule } from '../repo/writes'
 import { RATES } from '../seed/generate'
+import { resolveImportPath } from './import-path'
 
 /**
  * All twelve tools (spec 9), registered once and reused by the agent loop, the
@@ -320,6 +320,14 @@ export function createRegistry(owner: OwnerId): ToolRegistry {
   // 8. import_statement_csv (write)
   // ---------------------------------------------------------------------------
 
+  /*
+   * The wording here is deliberately unchanged even though `resolveImportPath`
+   * now confines reads to `data/`: every string in a tool schema is part of the
+   * explicitly cached prefix, and the replay fixtures hash over it, so editing
+   * this line makes `pnpm test` miss until the fixtures are re-recorded against
+   * a live model. A path outside `data/` fails with an error the model can read
+   * and recover from, which is the cheaper of the two ways to teach it.
+   */
   const importInput = z.object({
     path: z.string().describe('Path to a CSV file, relative to the repo root or absolute'),
     mapping_preset: z.enum(['generic', 'sample']).default('generic'),
@@ -342,8 +350,11 @@ export function createRegistry(owner: OwnerId): ToolRegistry {
         ? `preview ${input.path} (no data will be written)`
         : `import ${input.path} into the ledger`,
     handler: async (input) => {
+      // The path is refused before anything else happens — before the chart of
+      // accounts is touched and before the filesystem is read at all — so a
+      // rejected path cannot report whether the file existed.
+      const path = resolveImportPath(input.path)
       await ensureAccountsExist(owner)
-      const path = resolvePath(input.path)
       const text = await readFile(path, 'utf8')
       const { preview, resolved } = await planImport(owner, input.path, text, input.mapping_preset)
 
@@ -513,11 +524,5 @@ export function createReadOnlyRegistry(owner: OwnerId): ToolRegistry {
 }
 
 export const KNOWN_CATEGORIES = ALL_CATEGORIES
-
-function resolvePath(input: string): string {
-  if (isAbsolute(input)) return input
-  const root = process.cwd().replace(/\/(packages|apps)\/[^/]+$/, '')
-  return resolve(root, input)
-}
 
 export { minorToDecimalString }
