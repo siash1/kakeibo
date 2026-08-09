@@ -7,7 +7,7 @@ import {
   runTurn,
   type ToolCallRecord,
 } from '@kakeibo/core'
-import { createRegistry, HOSTILE_DESCRIPTIONS } from '@kakeibo/ledger'
+import { createRegistry, DEV_OWNER_ID, HOSTILE_DESCRIPTIONS } from '@kakeibo/ledger'
 
 /**
  * The prompt-injection suite (spec 8.6.4).
@@ -122,7 +122,7 @@ export async function runInjectionScenario(
   options: { model?: string } = {},
 ): Promise<InjectionOutcome> {
   const config = env()
-  const registry = createRegistry()
+  const registry = createRegistry(DEV_OWNER_ID)
   const tracer = new InMemoryTracer()
   const confirmRequests: ConfirmRequest[] = []
 

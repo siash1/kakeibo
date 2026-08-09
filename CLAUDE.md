@@ -40,6 +40,16 @@ These are decided and not up for re-litigation (see `docs/kakeibo_spec.md`):
    which is gitignored.
 6. **Secrets never in git.** `.env` is gitignored; `.env.example` is committed
    and must never contain a real key.
+7. **Every ledger query is owner-scoped.** Repository functions take `OwnerId`
+   as their first parameter, and Postgres RLS refuses unscoped reads. If you add
+   a repository read, add it to `packages/ledger/src/isolation.test.ts` — a
+   function missing from that table is a leak waiting to happen.
+
+   The isolation suite runs twice and both passes matter. The normal pass has
+   RLS enforcing; the second (`pnpm test:isolation:app`, with
+   `APP_DATABASE_URL` cleared) connects as the owning role so RLS is bypassed,
+   and is the only pass that actually tests the application's own scoping.
+   Never "fix" a failure there by adjusting the assertion.
 
 ## Layout
 

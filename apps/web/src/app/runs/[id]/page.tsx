@@ -1,5 +1,5 @@
 import { formatUsd } from '@kakeibo/core'
-import { getRun } from '@kakeibo/ledger'
+import { DEV_OWNER_ID, getRun } from '@kakeibo/ledger'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { Badge, Card, Stat, statusTone } from '@/components/ui'
@@ -29,7 +29,7 @@ interface EventRow {
 
 export default async function RunPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const data = await getRun(id)
+  const data = await getRun(DEV_OWNER_ID, id)
   if (!data) notFound()
 
   const { run, events } = data

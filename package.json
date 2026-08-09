@@ -23,14 +23,15 @@
     "record": "RECORD=1 pnpm --filter @kakeibo/evals run:eval -- --filter smoke",
     "mcp": "pnpm --filter @kakeibo/mcp start",
     "build": "pnpm -r --filter=@kakeibo/mcp build",
-    "test": "vitest run",
+    "test": "vitest run && pnpm test:isolation:app",
     "test:watch": "vitest",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
-    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json && pnpm --filter @kakeibo/web typecheck",
     "cache:report": "tsx scripts/cache-report.ts",
     "injection:report": "tsx scripts/injection-report.ts",
-    "metrics": "tsx scripts/metrics.ts"
+    "metrics": "tsx scripts/metrics.ts",
+    "test:isolation:app": "APP_DATABASE_URL= vitest run packages/ledger/src/isolation.test.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.14",

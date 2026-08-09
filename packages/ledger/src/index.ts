@@ -8,7 +8,7 @@ export {
   UNCATEGORIZED,
 } from './categories'
 export { type MappingPreset, normalizeDate, parseCsv, parseStatement, toCsv } from './csv'
-export { closeDb, type Db, getDb, getPool, schema } from './db'
+export { adminDb, closeDb, type Db, getDb, getPool, schema, type Tx, withOwner } from './db'
 export { deterministicUuid, SEED_NAMESPACE } from './ids'
 export { commitImport, ensureAccountsExist, planImport } from './import'
 export {
@@ -19,6 +19,7 @@ export {
   parseMinor,
   sumMinor,
 } from './money'
+export { asOwnerId, DEV_OWNER_ID, type OwnerId } from './owner'
 export {
   accountBalances,
   accountByName,
@@ -67,4 +68,5 @@ export {
   type SeedLabels,
   type SeedRow,
 } from './seed/generate'
-export { ALL_TOOLS, createReadOnlyRegistry, createRegistry, KNOWN_CATEGORIES } from './tools/index'
+export { resetOwner, resetOwners } from './testing'
+export { createReadOnlyRegistry, createRegistry, KNOWN_CATEGORIES } from './tools/index'

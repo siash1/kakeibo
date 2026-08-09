@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto'
 import type { Channel } from '@kakeibo/core/registry'
 import type { RunFinish, TraceEventInput, TraceRunHandle, Tracer } from '@kakeibo/core/trace'
-import { desc, eq } from 'drizzle-orm'
-import { getDb } from '../db'
+import { and, desc, eq } from 'drizzle-orm'
+import { withOwner } from '../db'
+import type { OwnerId } from '../owner'
 import { traceEvents, traceRuns } from '../schema'
 
 /**
@@ -14,26 +15,34 @@ import { traceEvents, traceRuns } from '../schema'
  * in the README can be called measured.
  */
 export class DbTracer implements Tracer {
+  // Owner is a constructor dependency, not a method parameter: Tracer is a
+  // core interface and core must not learn about tenancy.
+  constructor(private readonly owner: OwnerId) {}
+
   async startRun(info: {
     provider: string
     model: string
     channel: Channel
   }): Promise<TraceRunHandle> {
     const id = randomUUID()
-    await getDb().insert(traceRuns).values({
-      id,
-      provider: info.provider,
-      model: info.model,
-      channel: info.channel,
-    })
+    const owner = this.owner
+    await withOwner(owner, (tx) =>
+      tx.insert(traceRuns).values({
+        id,
+        ownerId: owner,
+        provider: info.provider,
+        model: info.model,
+        channel: info.channel,
+      }),
+    )
 
     let seq = 0
     return {
       id,
       event: async (input: TraceEventInput) => {
-        await getDb()
-          .insert(traceEvents)
-          .values({
+        await withOwner(owner, (tx) =>
+          tx.insert(traceEvents).values({
+            ownerId: owner,
             runId: id,
             seq: seq++,
             type: input.type,
@@ -43,32 +52,38 @@ export class DbTracer implements Tracer {
             outputTokens: input.outputTokens ?? null,
             cachedTokens: input.cachedTokens ?? null,
             thoughtSummary: input.thoughtSummary ?? null,
-          })
+          }),
+        )
       },
       finish: async (result: RunFinish) => {
-        await getDb()
-          .update(traceRuns)
-          .set({
-            finishedAt: new Date(),
-            status: result.status,
-            inputTokens: result.usage.inputTokens,
-            outputTokens: result.usage.outputTokens,
-            cachedTokens: result.usage.cachedTokens,
-            costUsdEst: result.costUsdEst.toFixed(6),
-            latencyMs: result.latencyMs,
-          })
-          .where(eq(traceRuns.id, id))
+        await withOwner(owner, (tx) =>
+          tx
+            .update(traceRuns)
+            .set({
+              finishedAt: new Date(),
+              status: result.status,
+              inputTokens: result.usage.inputTokens,
+              outputTokens: result.usage.outputTokens,
+              cachedTokens: result.usage.cachedTokens,
+              costUsdEst: result.costUsdEst.toFixed(6),
+              latencyMs: result.latencyMs,
+            })
+            .where(and(eq(traceRuns.ownerId, owner), eq(traceRuns.id, id))),
+        )
       },
     }
   }
 }
 
-export async function listRuns(limit = 50) {
-  const rows = await getDb()
-    .select()
-    .from(traceRuns)
-    .orderBy(desc(traceRuns.startedAt))
-    .limit(limit)
+export async function listRuns(owner: OwnerId, limit = 50) {
+  const rows = await withOwner(owner, (tx) =>
+    tx
+      .select()
+      .from(traceRuns)
+      .where(eq(traceRuns.ownerId, owner))
+      .orderBy(desc(traceRuns.startedAt))
+      .limit(limit),
+  )
   return rows.map((row) => ({
     ...row,
     inputTokens: Number(row.inputTokens),
@@ -82,14 +97,24 @@ export async function listRuns(limit = 50) {
   }))
 }
 
-export async function getRun(id: string) {
-  const [run] = await getDb().select().from(traceRuns).where(eq(traceRuns.id, id)).limit(1)
+export async function getRun(owner: OwnerId, id: string) {
+  // Returning undefined for another owner's run id is what lets the trace
+  // viewer 404 rather than leak that the run exists at all.
+  const [run] = await withOwner(owner, (tx) =>
+    tx
+      .select()
+      .from(traceRuns)
+      .where(and(eq(traceRuns.ownerId, owner), eq(traceRuns.id, id)))
+      .limit(1),
+  )
   if (!run) return undefined
-  const events = await getDb()
-    .select()
-    .from(traceEvents)
-    .where(eq(traceEvents.runId, id))
-    .orderBy(traceEvents.seq)
+  const events = await withOwner(owner, (tx) =>
+    tx
+      .select()
+      .from(traceEvents)
+      .where(and(eq(traceEvents.ownerId, owner), eq(traceEvents.runId, id)))
+      .orderBy(traceEvents.seq),
+  )
   return {
     run: {
       ...run,
@@ -112,13 +137,15 @@ export async function getRun(id: string) {
  * Restricted to model calls that actually had a prompt, so a run that errored
  * before its first call cannot dilute the percentage.
  */
-export async function cacheStats(): Promise<{
+export async function cacheStats(owner: OwnerId): Promise<{
   runs: number
   inputTokens: number
   cachedTokens: number
   savingsPercent: number
 }> {
-  const rows = await getDb().select().from(traceRuns)
+  const rows = await withOwner(owner, (tx) =>
+    tx.select().from(traceRuns).where(eq(traceRuns.ownerId, owner)),
+  )
   const withInput = rows.filter((r) => Number(r.inputTokens) > 0)
   const inputTokens = withInput.reduce((sum, r) => sum + Number(r.inputTokens), 0)
   const cachedTokens = withInput.reduce((sum, r) => sum + Number(r.cachedTokens), 0)

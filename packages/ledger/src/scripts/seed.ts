@@ -5,6 +5,7 @@ import { toCsv } from '../csv'
 import { closeDb } from '../db'
 import { commitImport, planImport } from '../import'
 import { formatMinor, minorToDecimalString } from '../money'
+import { DEV_OWNER_ID } from '../owner'
 import { ensureSeedAccounts } from '../repo/accounts'
 import { findUnbalancedTransactions } from '../repo/transactions'
 import { generateSeedData, RATES } from '../seed/generate'
@@ -46,10 +47,15 @@ async function main(): Promise<void> {
   console.log(`  ${labels.hostile.length} hostile descriptions planted`)
   console.log(`  ${labels.anomalies.length} anomalies planted`)
 
-  await ensureSeedAccounts()
+  await ensureSeedAccounts(DEV_OWNER_ID)
   console.log('Chart of accounts ready.')
 
-  const { preview, resolved } = await planImport('data/seed/transactions.csv', csv, 'sample')
+  const { preview, resolved } = await planImport(
+    DEV_OWNER_ID,
+    'data/seed/transactions.csv',
+    csv,
+    'sample',
+  )
   if (preview.parseErrors.length > 0) {
     console.error('Seed CSV failed to parse cleanly:', preview.parseErrors.slice(0, 5))
     process.exitCode = 1
@@ -57,7 +63,7 @@ async function main(): Promise<void> {
     return
   }
 
-  const result = await commitImport('data/seed/transactions.csv', resolved, preview, {
+  const result = await commitImport(DEV_OWNER_ID, 'data/seed/transactions.csv', resolved, preview, {
     deterministicIds: true,
   })
   console.log(`Imported ${result.imported} transactions (batch ${result.importBatchId})`)
@@ -66,7 +72,7 @@ async function main(): Promise<void> {
 
   // The invariant is asserted here as well as in the test suite, because a seed
   // that quietly unbalances the ledger would poison every eval downstream.
-  const unbalanced = await findUnbalancedTransactions()
+  const unbalanced = await findUnbalancedTransactions(DEV_OWNER_ID)
   if (unbalanced.length > 0) {
     console.error(`FATAL: ${unbalanced.length} unbalanced transaction(s) after seeding.`)
     process.exitCode = 1

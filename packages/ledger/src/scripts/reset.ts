@@ -1,6 +1,6 @@
 import { loadEnv } from '@kakeibo/core/env'
 import { sql } from 'drizzle-orm'
-import { closeDb, getDb } from '../db'
+import { adminDb, closeDb } from '../db'
 
 /**
  * `pnpm db:reset` — truncates ledger data, keeps the schema.
@@ -13,7 +13,9 @@ import { closeDb, getDb } from '../db'
 loadEnv()
 
 async function main(): Promise<void> {
-  await getDb().execute(
+  // adminDb: truncating every owner's data is precisely what the app role
+  // must not be able to do.
+  await adminDb().execute(
     sql`truncate table trace_events, trace_runs, postings, transactions, import_batches, budgets, rules, memories, accounts restart identity cascade`,
   )
   console.log('Ledger truncated.')

@@ -1,6 +1,7 @@
 import { and, eq, gte, inArray, lte, sql } from 'drizzle-orm'
 import { UNCATEGORIZED } from '../categories'
-import { getDb } from '../db'
+import { withOwner } from '../db'
+import type { OwnerId } from '../owner'
 import { accounts, budgets, postings, transactions } from '../schema'
 
 /**
@@ -47,6 +48,7 @@ export interface SpendGroup {
  * month as cheaper than it was.
  */
 export async function spendReport(
+  owner: OwnerId,
   period: Period,
   groupBy: 'category' | 'month',
   options: { includeIncome?: boolean } = {},
@@ -58,25 +60,34 @@ export async function spendReport(
       ? sql<string>`${accounts.name}`
       : sql<string>`to_char(${transactions.date}, 'YYYY-MM')`
 
-  const rows = await getDb()
-    .select({
-      group: groupExpr,
-      totalMinor: sql<number>`sum(${postings.amountMinor})::bigint`,
-      transactionCount: sql<number>`count(distinct ${transactions.id})::int`,
-      currency: sql<string>`min(${postings.currency})`,
-    })
-    .from(postings)
-    .innerJoin(transactions, eq(transactions.id, postings.transactionId))
-    .innerJoin(accounts, eq(accounts.id, postings.accountId))
-    .where(
-      and(
-        gte(transactions.date, period.from),
-        lte(transactions.date, period.to),
-        inArray(accounts.type, accountTypes as ('expense' | 'income')[]),
-      ),
-    )
-    .groupBy(groupExpr)
-    .orderBy(sql`2 desc`)
+  const rows = await withOwner(owner, (tx) =>
+    tx
+      .select({
+        group: groupExpr,
+        totalMinor: sql<number>`sum(${postings.amountMinor})::bigint`,
+        transactionCount: sql<number>`count(distinct ${transactions.id})::int`,
+        currency: sql<string>`min(${postings.currency})`,
+      })
+      .from(postings)
+      // Every join is owner-scoped, not just the outermost select: this query
+      // reads three tables together and an unscoped join on any one of them
+      // leaks totals across tenants.
+      .innerJoin(
+        transactions,
+        and(eq(transactions.id, postings.transactionId), eq(transactions.ownerId, owner)),
+      )
+      .innerJoin(accounts, and(eq(accounts.id, postings.accountId), eq(accounts.ownerId, owner)))
+      .where(
+        and(
+          eq(postings.ownerId, owner),
+          gte(transactions.date, period.from),
+          lte(transactions.date, period.to),
+          inArray(accounts.type, accountTypes as ('expense' | 'income')[]),
+        ),
+      )
+      .groupBy(groupExpr)
+      .orderBy(sql`2 desc`),
+  )
 
   return rows.map((row) => ({
     group: row.group,
@@ -94,16 +105,18 @@ export interface BudgetStatusRow {
   percentUsed: number | null
 }
 
-export async function budgetStatus(month: string): Promise<BudgetStatusRow[]> {
+export async function budgetStatus(owner: OwnerId, month: string): Promise<BudgetStatusRow[]> {
   const period = monthToPeriod(month)
-  const actuals = await spendReport(period, 'category')
+  const actuals = await spendReport(owner, period, 'category')
   const actualByCategory = new Map(actuals.map((a) => [a.group, a.totalMinor]))
 
-  const budgetRows = await getDb()
-    .select({ category: accounts.name, amountMinor: budgets.amountMinor })
-    .from(budgets)
-    .innerJoin(accounts, eq(accounts.id, budgets.accountId))
-    .where(eq(budgets.month, month))
+  const budgetRows = await withOwner(owner, (tx) =>
+    tx
+      .select({ category: accounts.name, amountMinor: budgets.amountMinor })
+      .from(budgets)
+      .innerJoin(accounts, and(eq(accounts.id, budgets.accountId), eq(accounts.ownerId, owner)))
+      .where(and(eq(budgets.ownerId, owner), eq(budgets.month, month))),
+  )
 
   const rows: BudgetStatusRow[] = budgetRows.map((row) => {
     const actual = actualByCategory.get(row.category) ?? 0
@@ -152,20 +165,28 @@ export interface RecurringMerchant {
  * same subscription, and treating them as two merchants is the main way naive
  * implementations under-report.
  */
-export async function detectRecurring(minOccurrences = 3): Promise<RecurringMerchant[]> {
-  const rows = await getDb()
-    .select({
-      date: transactions.date,
-      description: transactions.description,
-      amountMinor: postings.amountMinor,
-      category: accounts.name,
-      accountType: accounts.type,
-    })
-    .from(transactions)
-    .innerJoin(postings, eq(postings.transactionId, transactions.id))
-    .innerJoin(accounts, eq(accounts.id, postings.accountId))
-    .where(inArray(accounts.type, ['expense', 'income']))
-    .orderBy(transactions.date)
+export async function detectRecurring(
+  owner: OwnerId,
+  minOccurrences = 3,
+): Promise<RecurringMerchant[]> {
+  const rows = await withOwner(owner, (tx) =>
+    tx
+      .select({
+        date: transactions.date,
+        description: transactions.description,
+        amountMinor: postings.amountMinor,
+        category: accounts.name,
+        accountType: accounts.type,
+      })
+      .from(transactions)
+      .innerJoin(
+        postings,
+        and(eq(postings.transactionId, transactions.id), eq(postings.ownerId, owner)),
+      )
+      .innerJoin(accounts, and(eq(accounts.id, postings.accountId), eq(accounts.ownerId, owner)))
+      .where(and(eq(transactions.ownerId, owner), inArray(accounts.type, ['expense', 'income'])))
+      .orderBy(transactions.date),
+  )
 
   const groups = new Map<string, { date: string; amount: number; category: string }[]>()
   for (const row of rows) {
@@ -263,28 +284,34 @@ export interface Anomaly {
  * The threshold is two-sided because "2.5 sigma from the mean" is two-sided;
  * only the label differs by direction.
  */
-export async function flagAnomalies(month: string): Promise<Anomaly[]> {
+export async function flagAnomalies(owner: OwnerId, month: string): Promise<Anomaly[]> {
   const period = monthToPeriod(month)
   const trailingFrom = `${shiftMonth(month, -6)}-01`
 
-  const rows = await getDb()
-    .select({
-      transactionId: transactions.id,
-      date: transactions.date,
-      description: transactions.description,
-      amountMinor: postings.amountMinor,
-      category: accounts.name,
-    })
-    .from(transactions)
-    .innerJoin(postings, eq(postings.transactionId, transactions.id))
-    .innerJoin(accounts, eq(accounts.id, postings.accountId))
-    .where(
-      and(
-        gte(transactions.date, trailingFrom),
-        lte(transactions.date, period.to),
-        eq(accounts.type, 'expense'),
+  const rows = await withOwner(owner, (tx) =>
+    tx
+      .select({
+        transactionId: transactions.id,
+        date: transactions.date,
+        description: transactions.description,
+        amountMinor: postings.amountMinor,
+        category: accounts.name,
+      })
+      .from(transactions)
+      .innerJoin(
+        postings,
+        and(eq(postings.transactionId, transactions.id), eq(postings.ownerId, owner)),
+      )
+      .innerJoin(accounts, and(eq(accounts.id, postings.accountId), eq(accounts.ownerId, owner)))
+      .where(
+        and(
+          eq(transactions.ownerId, owner),
+          gte(transactions.date, trailingFrom),
+          lte(transactions.date, period.to),
+          eq(accounts.type, 'expense'),
+        ),
       ),
-    )
+  )
 
   const history = new Map<string, number[]>()
   for (const row of rows) {

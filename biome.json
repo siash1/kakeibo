@@ -16,7 +16,8 @@
       "!data",
       "!evals/report",
       "!**/pnpm-lock.yaml",
-      "!**/*.css"
+      "!**/*.css",
+      "!**/.claude"
     ]
   },
   "formatter": {

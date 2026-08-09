@@ -29,6 +29,15 @@ import {
  * could not see.
  */
 
+/**
+ * Owner of the row.
+ *
+ * No foreign key yet: the principal table arrives with Better Auth in Plan B,
+ * and a column cannot reference a table that does not exist. Plan B adds
+ * `references "user"(id) on delete cascade` in its own migration.
+ */
+const ownerId = () => uuid('owner_id').notNull()
+
 export const accountTypeEnum = pgEnum('account_type', [
   'asset',
   'liability',
@@ -51,16 +60,23 @@ export const traceEventTypeEnum = pgEnum('trace_event_type', [
   'error',
 ])
 
-export const accounts = pgTable('accounts', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  name: text('name').notNull().unique(),
-  type: accountTypeEnum('type').notNull(),
-  currency: char('currency', { length: 3 }).notNull().default('INR'),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-})
+export const accounts = pgTable(
+  'accounts',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ownerId: ownerId(),
+    // NOT globally unique any more: every owner has their own "Groceries".
+    name: text('name').notNull(),
+    type: accountTypeEnum('type').notNull(),
+    currency: char('currency', { length: 3 }).notNull().default('INR'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [unique('accounts_owner_name_key').on(table.ownerId, table.name)],
+)
 
 export const importBatches = pgTable('import_batches', {
   id: uuid('id').primaryKey().defaultRandom(),
+  ownerId: ownerId(),
   filename: text('filename').notNull(),
   rowCount: integer('row_count').notNull(),
   importedAt: timestamp('imported_at', { withTimezone: true }).notNull().defaultNow(),
@@ -70,6 +86,7 @@ export const transactions = pgTable(
   'transactions',
   {
     id: uuid('id').primaryKey().defaultRandom(),
+    ownerId: ownerId(),
     date: date('date').notNull(),
     /** Cleaned description shown to the user. */
     description: text('description').notNull(),
@@ -80,13 +97,14 @@ export const transactions = pgTable(
     }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [index('transactions_date_idx').on(table.date)],
+  (table) => [index('transactions_owner_date_idx').on(table.ownerId, table.date)],
 )
 
 export const postings = pgTable(
   'postings',
   {
     id: uuid('id').primaryKey().defaultRandom(),
+    ownerId: ownerId(),
     transactionId: uuid('transaction_id')
       .notNull()
       .references(() => transactions.id, { onDelete: 'cascade' }),
@@ -97,13 +115,14 @@ export const postings = pgTable(
     currency: char('currency', { length: 3 }).notNull().default('INR'),
   },
   (table) => [
-    index('postings_transaction_idx').on(table.transactionId),
-    index('postings_account_idx').on(table.accountId),
+    index('postings_owner_transaction_idx').on(table.ownerId, table.transactionId),
+    index('postings_owner_account_idx').on(table.ownerId, table.accountId),
   ],
 )
 
 export const rules = pgTable('rules', {
   id: uuid('id').primaryKey().defaultRandom(),
+  ownerId: ownerId(),
   /** Case-insensitive substring matched against the raw description. */
   pattern: text('pattern').notNull(),
   accountId: uuid('account_id')
@@ -117,6 +136,7 @@ export const budgets = pgTable(
   'budgets',
   {
     id: uuid('id').primaryKey().defaultRandom(),
+    ownerId: ownerId(),
     accountId: uuid('account_id')
       .notNull()
       .references(() => accounts.id, { onDelete: 'cascade' }),
@@ -129,6 +149,7 @@ export const budgets = pgTable(
 
 export const memories = pgTable('memories', {
   id: uuid('id').primaryKey().defaultRandom(),
+  ownerId: ownerId(),
   content: text('content').notNull(),
   category: text('category').notNull(),
   source: memorySourceEnum('source').notNull().default('user_stated'),
@@ -139,6 +160,7 @@ export const traceRuns = pgTable(
   'trace_runs',
   {
     id: uuid('id').primaryKey().defaultRandom(),
+    ownerId: ownerId(),
     startedAt: timestamp('started_at', { withTimezone: true }).notNull().defaultNow(),
     finishedAt: timestamp('finished_at', { withTimezone: true }),
     provider: text('provider').notNull(),
@@ -151,13 +173,14 @@ export const traceRuns = pgTable(
     latencyMs: integer('latency_ms').notNull().default(0),
     channel: channelEnum('channel').notNull(),
   },
-  (table) => [index('trace_runs_started_idx').on(table.startedAt)],
+  (table) => [index('trace_runs_owner_started_idx').on(table.ownerId, table.startedAt)],
 )
 
 export const traceEvents = pgTable(
   'trace_events',
   {
     id: uuid('id').primaryKey().defaultRandom(),
+    ownerId: ownerId(),
     runId: uuid('run_id')
       .notNull()
       .references(() => traceRuns.id, { onDelete: 'cascade' }),
@@ -170,7 +193,7 @@ export const traceEvents = pgTable(
     cachedTokens: bigint('cached_tokens', { mode: 'number' }),
     thoughtSummary: text('thought_summary'),
   },
-  (table) => [index('trace_events_run_idx').on(table.runId, table.seq)],
+  (table) => [index('trace_events_owner_run_idx').on(table.ownerId, table.runId, table.seq)],
 )
 
 export type Account = typeof accounts.$inferSelect

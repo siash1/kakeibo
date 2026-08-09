@@ -5,7 +5,7 @@
 import { env, loadEnv } from '@kakeibo/core/env'
 import type { ToolSpec } from '@kakeibo/core/registry'
 import { zodToJsonSchema } from '@kakeibo/core/schema'
-import { closeDb, createRegistry } from '@kakeibo/ledger'
+import { closeDb, createRegistry, DEV_OWNER_ID } from '@kakeibo/ledger'
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js'
@@ -52,7 +52,7 @@ only when the server is started with ALLOW_WRITES=1.
 
 async function main(): Promise<void> {
   const allowWrites = env().ALLOW_WRITES
-  const full = createRegistry()
+  const full = createRegistry(DEV_OWNER_ID)
   const registry = allowWrites ? full : full.readOnly()
 
   const server = new Server(
