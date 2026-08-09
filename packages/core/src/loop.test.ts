@@ -58,9 +58,6 @@ const base = {
   system: 'test system prompt',
 }
 
-const allow = async () => true
-const deny = async () => false
-
 describe('runTurn', () => {
   it('returns the final text when the model calls no tools', async () => {
     const adapter = new ScriptedAdapter([{ content: [textBlock('You spent ₹100.')] }])

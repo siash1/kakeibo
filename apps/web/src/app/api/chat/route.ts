@@ -6,7 +6,7 @@ import {
   DEV_OWNER_ID,
   KNOWN_CATEGORIES,
 } from '@kakeibo/ledger'
-import { awaitConfirmation, getHistory, setHistory } from '@/lib/session'
+import { getHistory, setHistory } from '@/lib/session'
 
 /**
  * POST /api/chat -> Server-Sent Events (spec 13).
@@ -15,8 +15,14 @@ import { awaitConfirmation, getHistory, setHistory } from '@/lib/session'
  *
  * The confirmation flow is the reason this is SSE and not a plain JSON
  * response: the loop stops mid-turn waiting for a human, and the client needs
- * to see that happen and be able to answer it on a *second* request while the
- * first is still open.
+ * to see that happen.
+ *
+ * The turn runs under the `suspend` policy: a batch containing a write ends the
+ * turn and hands back what it was about to do, rather than blocking on a promise
+ * that a second HTTP request resolves. That promise worked on one long-running
+ * process and cannot work on serverless, where /api/chat and /api/confirm are
+ * different invocations. Persisting the suspended state and resuming from it is
+ * Plan B task 10; until then the card is emitted and answering it is a no-op.
  */
 
 export const runtime = 'nodejs'
@@ -88,18 +94,20 @@ export async function POST(request: Request): Promise<Response> {
           knownCategories: KNOWN_CATEGORIES,
           contextManager,
           signal: abort.signal,
-          confirm: async (confirmRequest) => {
-            send('confirm_request', confirmRequest)
-            const allowed = await awaitConfirmation(confirmRequest)
-            send('confirm_resolved', { id: confirmRequest.id, allowed })
-            return allowed
-          },
+          confirmPolicy: { mode: 'suspend' },
           onText: (delta) => send('token', { delta }),
           onToolCall: (call) => send('tool_call', call),
           onToolResult: (toolResult) => send('tool_result', toolResult),
         })
 
-        setHistory(sessionId, result.history)
+        for (const item of result.suspended?.pending ?? []) {
+          send('confirm_request', { ...item, tier: 'write' })
+        }
+
+        // A suspended turn's history ends on the assistant message whose tool
+        // calls are still unanswered. Storing it would make the next turn open
+        // with an unanswered batch, which is a hard 400 from the provider.
+        if (result.status !== 'suspended') setHistory(sessionId, result.history)
 
         send('turn_end', {
           run_id: result.runId,
