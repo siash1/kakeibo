@@ -21,6 +21,14 @@ you ──▶ CLI / web / MCP ──▶ runTurn ──▶ Gemini (Vertex)
                                └─▶ tracer ──▶ trace_runs / trace_events
 ```
 
+![The confirm-before-write gate: the turn suspended, the proposed write posted in
+the margin, and the amount shown as money beside the literal argument being
+authorised.](docs/screens/gate.jpg)
+
+*The write gate, mid-turn. The loop is suspended in Postgres waiting on this
+answer; the margin records what the agent did and what it cost. Every screenshot
+in this README is the running app, not a mock-up.*
+
 ---
 
 ## The numbers
@@ -38,7 +46,7 @@ command. Nothing here is an estimate.
 | Median / p95 turn latency | **15.2 s** / **23.5 s** | `pnpm eval` |
 | Median cost per eval task | **$0.0105** (list price) | `pnpm eval` |
 | Context estimate error vs `countTokens` | **3.2% mean absolute** | `pnpm metrics` |
-| Tests | **228** across 29 files, plus the isolation suite a second time with RLS bypassed (12 more); no API key and no network | `pnpm test` |
+| Tests | **236** across 30 files, plus the isolation suite a second time with RLS bypassed (15 more); no API key and no network | `pnpm test` |
 | Tools | 12 | `pnpm cli` then `/help` |
 | Core loop | **496 lines** of code (`packages/core/src/loop.ts`, 639 with comments) | `pnpm metrics` |
 
@@ -47,7 +55,7 @@ from Google's published Vertex pricing. They are useful as *relative* numbers �
 cached versus uncached, Flash versus Pro — which is what they are used for.
 
 The Tests row cites `pnpm test`, which is vitest's own runtime count.
-`pnpm metrics` prints a lower number for the same 29 files (216, not 228): it
+`pnpm metrics` prints a lower number for the same 30 files (223, not 236): it
 is a static `grep` for `it(`/`test(` declarations, and `isolation.test.ts`
 builds several tests from a table at runtime that the grep only sees once.
 Both figures are real; they are answers to different questions, not a
@@ -628,6 +636,23 @@ every push. Live evals run only on `workflow_dispatch`, because they cost money.
 
 ---
 
+## The surfaces
+
+Two genres on one site. The product pages are a 家計簿 — warm paper, sumi ink,
+ruled hairlines, no accent colour — and the machine's own record keeps the dark
+terminal it was born in. Crossing between them flips the ground entirely and
+keeps one nav, so it reads as another room of the same building.
+`apps/web/DESIGN.md` records the system.
+
+| | |
+| --- | --- |
+| ![The landing page, built as a statement of account: ruled line items, each claim with the measured figure that backs it.](docs/screens/landing.jpg) | ![The dashboard for April 2025, showing spend by category, recurring merchants and the planted anomaly the detector found.](docs/screens/dashboard.jpg) |
+| **`/`** — a statement of account for the system itself. Every figure is read out of `evals/report/latest.json` or counted off the tool registry at render time. | **`/dashboard`** — the same data the agent reaches for, laid out to be taken in at a glance. |
+| ![The trace viewer, in the terminal genre: every model call and tool call in one timeline with tokens, cache hits, latency and cost.](docs/screens/trace.jpg) | |
+| **`/runs/[id]`** — the machine room. Every model call and tool call, synchronously recorded; the numbers in this README are read back out of these tables. | |
+
+---
+
 ## Layout
 
 ```
@@ -636,7 +661,7 @@ packages/ledger    Drizzle schema, double-entry repositories, all 12 tool implem
 packages/mcp       MCP stdio server over the same registry
 packages/evals     harness, golden tasks, judge, report generator, injection suite
 apps/cli           readline chat with streaming and a y/n confirm gate
-apps/web           Next.js: auth, chat, trace viewer, evals report
+apps/web           Next.js: landing, chat, dashboard, evals, trace viewer, admin
 ```
 
 Dependency direction is one-way: `ledger` → `core`; `mcp`, `evals` and the apps

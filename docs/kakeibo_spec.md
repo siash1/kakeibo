@@ -425,8 +425,25 @@ checks:
 ## 13. `apps/web`
 
 - Routes: `/` chat; `/runs` trace list (time, channel, model, tokens, cached %, cost, status); `/runs/[id]` timeline — every model_call (tokens in/out, cached tokens, latency, thought summary if recorded) and tool_call (args, result, latency, collapsible JSON); `/evals` renders `evals/report/latest.json` if present.
+
+  *Amended 2026-08-10 (Phase 2).* The routes are now `/` landing, `/chat` the
+  agent, `/dashboard`, `/evals`, `/runs` and `/runs/[id]`, plus `/admin` from
+  Plan C. Design spec §7 is the authority on the set.
 - Chat transport: `POST /api/chat` → SSE events: `token` (text delta), `tool_call {name,args}`, `tool_result {name, summary}`, `confirm_request {id, tool, args}`, `turn_end {run_id, usage}`, `error`. Confirmation: UI renders an inline allow/deny card → `POST /api/confirm {id, allow}` resolves the loop's pending promise. Single-process state is fine (single user).
 - Look: clean dark UI, monospace numbers, no design heroics — but tool calls and confirm cards must look deliberate, not debug-dump. Trace viewer is a first-class page, not an afterthought (it demos "observability" in interviews).
+
+  *Amended 2026-08-10 (Phase 2).* "Clean dark UI" now describes the machine room
+  only. The product surfaces — `/`, `/chat`, `/dashboard`, `/evals` — are a
+  warm-paper 家計簿 genre with no chromatic accent; `/runs` and `/admin` keep the
+  dark monospace terminal, deliberately. The requirement that tool calls and
+  confirm cards look deliberate rather than debug-dump survives the change and
+  is the reason the machinery is a ruled margin rail rather than a collapsed
+  drawer. `apps/web/DESIGN.md` is the authority on the visual system.
+
+- Chat transport, amended: the confirm round trip no longer "resolves the loop's
+  pending promise" and single-process state is no longer fine. Plan B replaced
+  it with a `ConfirmPolicy`; under `suspend` the turn is persisted and a second
+  request resumes it. See §11's Plan B amendment.
 
 ## 14. `apps/cli`
 
