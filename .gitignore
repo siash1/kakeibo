@@ -23,3 +23,6 @@ evals/report/runs/
 
 .DS_Store
 coverage/
+
+# Imagen plates for the social card; the finished asset is committed, these are not.
+.brand-out/

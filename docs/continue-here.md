@@ -133,9 +133,13 @@ to make and which had no design on it at all. The plate is a generated sheet of
 ledger paper; every glyph on it is composited by the browser in the real Source
 Serif 4. **Generate material, never lettering** — a model rendering type gets
 letterforms almost right, and almost right on a wordmark is worse than no image.
-The generator is a scratchpad script, per the launch prompt; only the finished
-asset is in git. Its four figures are the measured ones, so `pnpm eval` changing
-them means regenerating the card.
+Its four figures are the measured ones, so `pnpm eval` changing them means the
+card is wrong until it is regenerated — which is why the generator is committed
+at `scripts/brand/` rather than left in a scratchpad. The launch prompt keeps
+design tooling out of the repo, and that rule is about design *references*; a
+build step for a committed asset whose numbers must stay reproducible is a
+different thing. `scripts/brand/imagen.py` carries the full recipe, the exact
+plate prompt, and the two rejected candidates with the reasons.
 
 ### Not started: Plan D
 
