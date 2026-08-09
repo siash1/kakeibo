@@ -8,8 +8,9 @@ or just say: **"Read docs/continue-here.md and start."**
 ## Where things stand
 
 kakeibo is a from-scratch Gemini agent over a double-entry ledger, live at
-`github.com/siash1/kakeibo`. It is being taken public in four plans. **Three
-are done and merged. Plan D has not been written.**
+`github.com/siash1/kakeibo`. It is being taken public in four plans plus a UI
+phase. **Three plans are merged. Phase 2 is half built on a branch. Plan D has
+not been written.**
 
 **Read first, in this order:**
 
@@ -21,90 +22,156 @@ are done and merged. Plan D has not been written.**
    provably cannot exist.
 3. `README.md` for the architecture, `docs/kakeibo_spec.md` for the build spec
    (its "no accounts" non-goal is superseded; §7, §8.6 and §16 carry the Plan
-   A and B amendments, and §7/§16 carry Plan C's — `operator_flags`, the five
-   `geo_*` columns, `ADMIN_EMAILS`, `ALLOW_DESTRUCTIVE_RESET`).
-4. `docs/superpowers/plans/2026-08-09-auth-and-serverless-readiness.md` — Plan
-   B, and in particular its **"What actually happened"** section, which
-   records every place the implementation diverged from the plan and why.
-5. `docs/superpowers/plans/2026-08-09-operator-dashboard.md` — Plan C — and
-   `.superpowers/sdd/2026-08-09-operator-dashboard/progress.md` alongside it.
-   The progress log is the more honest document: nearly every task found a
-   defect in its own brief (a wrong containment allowlist, a bare
-   `current_date` that had already shipped a live enforcement bug, a test
-   fixture leaking into a sibling suite) and the log says what the defect was
-   and why the fix is what it is, not just that a task is "done."
+   A and B amendments, and §7/§16 carry Plan C's).
+4. `apps/web/PRODUCT.md` — product truth for the UI work: who the visitor is,
+   what success looks like, what is real and what is synthetic. Written at the
+   start of Phase 2 and it is the thing to argue with, not around.
+5. `docs/superpowers/plans/2026-08-09-auth-and-serverless-readiness.md` (Plan B)
+   and `docs/superpowers/plans/2026-08-09-operator-dashboard.md` (Plan C), each
+   with its **"What actually happened"** section. Nearly every task in Plan C
+   found a defect in its own brief; the record says what and why.
 
 ### Done and merged to `main`
 
-- **Phase 1** — decisions, design spec, three-plan split (later four; see
-  below).
 - **Plan A: multi-tenancy foundation.** `owner_id` on all nine tables,
   ~24 repository functions take a branded `OwnerId` first, Postgres row-level
   security as a backstop against a non-owning `app_user` role, a cross-tenant
   isolation suite that runs in two enforcement modes.
-- **Plan B: auth and serverless readiness.** All twelve tasks. Better Auth with
-  the anonymous plugin, `owner_id` actually referencing `"user"(id)` on delete
-  cascade, ledger repointing on sign-in, conversation and suspended-turn
-  persistence, a suspendable/resumable agent loop, per-owner and per-IP quotas
-  with a global budget cap, the web round trip, the lazy per-visitor demo
-  ledger, and the nightly reaper.
-- **Plan C: operator dashboard.** All ten tasks. Coarse per-run geolocation
-  from Vercel's edge headers (five nullable `geo_*` columns on `trace_runs`); a
-  guard that refuses `db:reset`/`pnpm eval` against a non-localhost database
-  without `ALLOW_DESTRUCTIVE_RESET=1`; a site-wide live-chat kill switch
-  (`operator_flags`); the one door through row-level security,
-  `packages/ledger/src/repo/admin.ts`, gated by a branded `AdminSession` only
-  `assertAdmin` can produce and held to a reviewed allowlist by
-  `admin-containment.test.ts`; eight read panels (budget, traffic, health,
-  safety, tools, recent runs, users, map) and two audited operator actions
-  (pause live chat, block an owner) at `/admin` — terminal genre, matching the
-  trace viewer, not the warm-editorial product pages Phase 2 will define.
+- **Plan B: auth and serverless readiness.** Better Auth with the anonymous
+  plugin, `owner_id` referencing `"user"(id)` on delete cascade, ledger
+  repointing on sign-in, conversation and suspended-turn persistence, a
+  suspendable/resumable agent loop, per-owner and per-IP quotas with a global
+  budget cap, the web round trip, the lazy per-visitor demo ledger, the reaper.
+- **Plan C: operator dashboard.** Coarse per-run geolocation, the `db:reset`
+  guard, the live-chat kill switch, the one door through RLS
+  (`packages/ledger/src/repo/admin.ts`, gated by a branded `AdminSession` and
+  held to a reviewed allowlist by `admin-containment.test.ts`), eight read
+  panels and two audited operator actions at `/admin`.
 
-  **228 tests across 29 files, plus a 12-test second isolation pass, all
-  green** (`pnpm test`); `pnpm injection:report` still 100% block rate (it
-  replays fixtures under `REPLAY=1` — no API key, no cost); `pnpm --filter
-  @kakeibo/web build` succeeds with `/admin` emitted as a dynamic route.
+**233 tests across 30 files, plus a 12-test second isolation pass, all green**
+(`pnpm test`); `pnpm injection:report` still 100%; `pnpm --filter @kakeibo/web
+build` succeeds.
 
-### Not started
+### In flight: Phase 2, branch `ui-overhaul`
 
-- **Plan D.** Needs writing with `/writing-plans`. Its scope, from the design
-  spec: the sign-in / sign-up / `/settings` pages, `/privacy` and `/terms` —
-  all "warm editorial" product pages (design spec §7) that the terminal-genre
-  `/admin` and `/runs` pages deliberately are not — Turnstile on the anonymous
-  entry point (design spec §5, layer 4), and the Vercel + Neon deploy (design
-  spec §10), which already has the pieces Plan C built for it:
-  `ALLOW_DESTRUCTIVE_RESET` and the `assertResettable` guard in
-  `packages/ledger/src/reset-guard.ts` exist specifically so a production
-  `DATABASE_URL` in a local shell cannot eat a live database with one
-  `pnpm eval`. All of it waits on either Phase 2's visual direction or on an
-  account only the owner can create (Neon, Vercel, a Cloudflare Turnstile site
-  key, Google OAuth credentials for the deployed origin) — see "What needs the
-  owner" below.
-- **Phase 2 — the UI overhaul.** See `docs/public-launch-prompt.md` §2: warm
-  editorial-minimal for product pages, terminal genre kept for the trace viewer
-  and the admin dashboard, a landing page, brand assets. Images via Vertex
-  Imagen 4 Ultra (`imagen-4.0-ultra-generate-001`), same GCP project and ADC as
-  Gemini.
+Worktree at `.worktrees/ui-overhaul`, **one commit, not pushed, not merged.**
+The gate is green on it (233 + 12, lint, typecheck, web build).
+
+The owner picked the direction in a structured round; these are decided and not
+to be re-opened:
+
+| | |
+| --- | --- |
+| Ground | **Warm paper, light** for product pages |
+| Type | **Serif display + sans body**; mono only for code, IDs and terminal pages |
+| The seam | **Hard cut, shared nav** — crossing to `/runs` or `/admin` flips the ground entirely |
+| Accent | **None.** Sumi ink on paper; colour only where it means something |
+
+**What the commit contains:**
+
+- `apps/web/src/app/globals.css` — two palettes in one file. A `paper`/`sumi`
+  ramp at hue ~85 for the product genre, the incumbent cool `ink` ramp kept
+  unchanged for the terminal genre, status colours in two tunings, and the
+  browser surfaces (selection, caret, scrollbars, focus rings) themed per genre.
+- **Route groups `(paper)` and `(terminal)`.** Each layout paints its own
+  full-height ground via `[data-genre]`; `body` owns neither, which is what
+  lets a nested route change worlds without fighting the root. Every existing
+  page moved into `(terminal)` unchanged, so nothing broke.
+- `apps/web/src/components/ledger.tsx` — the paper primitives. Rules, not
+  cards: a section is a ruled band with its heading sitting on the rule. There
+  are no cards in a 家計簿.
+- `apps/web/src/components/bars.tsx` — `SpendBars` and `BudgetMeter`.
+- `apps/web/src/app/(paper)/dashboard/page.tsx` — the dashboard, with month
+  navigation across the seed range.
+- Two self-hosted faces via `@fontsource-variable`: **Source Serif 4** display,
+  **Public Sans** body. Both were chosen partly for *not* being on the design
+  skill's banned list of training-data defaults; if you swap them, check that
+  list first.
+
+**What remains in Phase 2, in the order to do it:**
+
+1. **Restyle the chat page and move it to `/chat`.** It is currently
+   `app/(terminal)/page.tsx` and still wears terminal styling — correct and
+   unbroken, but it is a product surface and belongs in `(paper)`. Design spec
+   §7 puts the agent at `/chat` and the landing page at `/`.
+2. **Landing page at `/`.** Hero, the free replayed demo, the engineering
+   story, a CTA. This is the one **Persuade** surface in the product; every
+   other page is Operate. `docs/public-launch-prompt.md` §2 names
+   `/imagegen-frontend-web` for the prompting method and Vertex Imagen 4 Ultra
+   (`imagen-4.0-ultra-generate-001`, same GCP project and ADC as Gemini) for
+   generation. Design-reference images stay out of git; final assets go in
+   `apps/web/public/`.
+3. **Brand assets** — the 家計簿 mark and wordmark. `/brandkit`.
+4. **Restyle `/evals` into the paper genre.** It is a product-facing report,
+   not a machine record. Left in `(terminal)` only because moving it without
+   restyling would have shipped ink-on-paper colours.
+5. **Finish the design cycle properly.** The `impeccable` skill's own contract:
+   run its detector over the changed targets
+   (`node ~/.claude/skills/impeccable/scripts/detect.mjs --json <targets>`),
+   spawn `impeccable-finish-reviewer` with screenshots, then
+   `impeccable-documenter` to write `apps/web/DESIGN.md` **from the built
+   world**. A new visual world shipped without DESIGN.md is an incomplete run
+   by that skill's definition, and DESIGN.md is deliberately written at the
+   end, not the start.
+
+### Not started: Plan D
+
+Needs writing with `/writing-plans`. Scope, from the design spec: the sign-in /
+sign-up / `/settings` pages, `/privacy` and `/terms` (all paper-genre product
+pages — do Phase 2 first or build them twice), Turnstile on the anonymous entry
+point (§5 layer 4), and the Vercel + Neon deploy (§10). The deploy already has
+the pieces Plan C built for it: `ALLOW_DESTRUCTIVE_RESET` and
+`assertResettable` in `packages/ledger/src/reset-guard.ts` exist so a
+production `DATABASE_URL` in a local shell cannot eat a live database with one
+`pnpm eval`.
+
+`/privacy` has a specific obligation, not boilerplate: design spec §9.6 says
+trace payloads contain tool arguments and results, so an operator reading a
+trace is reading that visitor's ledger contents. The page must say so plainly.
 
 ## Start here
 
 ```bash
 pnpm install
 pnpm db:up && pnpm db:migrate && pnpm db:seed
-pnpm test                       # expect 228 + 12, all green
+pnpm test                       # expect 233 + 12, all green
 ```
 
-To see the dashboard itself, set `ADMIN_EMAILS` in `.env` to whatever email you
-sign in with locally, then visit `/admin` after signing in — everything else
-about it is 404 by design, including a signed-in but non-allowlisted session.
+To pick up Phase 2:
+
+```bash
+cd .worktrees/ui-overhaul       # or: git worktree add .worktrees/ui-overhaul ui-overhaul
+pnpm install && cp ../../.env .env
+pnpm dev
+```
+
+Then sign in (anonymous is enough) and visit `/dashboard`. To see `/admin`, set
+`ADMIN_EMAILS` in `.env` to an address you sign in with **and** mark it
+verified once — `/admin` now requires `emailVerified`, and no mail provider is
+configured:
+
+```sql
+update "user" set email_verified = true where email = '<your address>';
+```
 
 ## How to work
 
 The project skills in `.claude/skills/` are used at the step they are named
-for: `/writing-plans` for Plan D, `/using-git-worktrees` to isolate,
-`/executing-plans` or `/subagent-driven-development` to implement,
+for: `/impeccable` for the remaining UI work, `/writing-plans` for Plan D,
+`/using-git-worktrees` to isolate, `/executing-plans` or
+`/subagent-driven-development` to implement,
 `/verification-before-completion` before claiming anything is done, and
 `/finishing-a-development-branch` to land it.
+
+Subagent-driven execution earned its cost on Plan C and is worth repeating for
+anything plan-shaped: every one of its ten task briefs contained at least one
+real defect, and in each case the implementer that pushed back was right. Two
+habits from that run are worth keeping:
+
+- **Run the full gate yourself before each review.** One implementer reported
+  green on a 119-test subset while the full suite failed 8 — and the failure
+  was that its own change truncated the seeded ledger on every test run.
+- **Hand briefs over as files, and treat their code as a draft to verify.**
 
 ## Things that cost time to learn — do not rediscover them
 
@@ -256,6 +323,13 @@ this is missing proof rather than a known leak, and the second, RLS-bypassed
 pass is exactly the thing that would catch it if that ever stopped being true.
 Add them next time that file is opened.
 
+**The populated dashboard has never been looked at.** Its empty state and its
+mobile layout were captured and checked; the version with 25 bars, budget
+meters and anomaly rows was verified by parsing the HTML for the right figures
+and row counts. That is evidence the data path works and no evidence at all
+about whether it reads well. Closing it needs a browser session with a real
+cookie — see "Screenshotting the app" above.
+
 Not gaps, for the avoidance of a second look: `adminGetRun` and everything else
 in `packages/ledger/src/repo/admin.ts` are deliberately absent from the
 isolation suite. They read across owners on purpose, which is what
@@ -346,6 +420,20 @@ Decided during Plan B, and worth the same treatment:
 | Signing in when the account already has a ledger | The anonymous one is discarded, not merged — both are clones of one corpus, so merging doubles every report |
 | Persisting conversation history | Replace the thread, never append: the context manager rewrites history when it summarises |
 | Quota on a resumed turn | Free. It was charged when the turn started; blocking and the daily cap still apply |
+
+Decided during Phase 2, by the owner, in a structured round — same standing:
+
+| Question | Answer |
+| --- | --- |
+| Ground for product pages | Warm paper, light. Not a warmer dark, not a dark landing |
+| Typographic voice | Serif display + sans body; mono only for code, IDs and terminal pages |
+| Where the two genres meet | Hard cut, shared nav — crossing flips the ground entirely |
+| Accent colour | **None.** Sumi ink on paper; colour only where it carries meaning |
+
+The no-accent decision is the load-bearing one and the easiest to erode. It
+means emphasis comes from weight, scale and the rules — and it is why the
+status colours still read as signals when they appear. Adding "just one accent"
+later does not add a colour; it removes the reason the others work.
 
 $20/month is roughly 148 live turns a day, or 20–40 visitors. Past the cap the
 site falls back to replaying a recorded fixture conversation, which is free and
