@@ -546,21 +546,29 @@ async function executeToolUse(
   // Write tier pauses the loop for a human (spec 8.6.1).
   let confirmed: boolean | undefined
   if (spec.tier === 'write') {
-    const request = {
-      id: randomUUID(),
-      tool: spec.name,
-      tier: spec.tier,
-      args: parsed.data,
-      summary: summarizeCall(spec, parsed.data),
-    }
-    confirmed = skipConfirmation ? true : await decideByPolicy(options.confirmPolicy, request)
-    await run.event({
-      type: 'confirm',
-      latencyMs: Date.now() - started,
-      payload: { ...request, args: clipForTrace(request.args), allowed: confirmed },
-    })
-    if (!confirmed) {
-      return emit('User declined. Do not retry without new instruction.', false, false)
+    if (skipConfirmation) {
+      // Already asked and already recorded, on the resume path. Emitting a
+      // second confirm event here would put the same decision in the timeline
+      // twice under two different ids, and double every "writes allowed" count
+      // computed from trace_events.
+      confirmed = true
+    } else {
+      const request = {
+        id: randomUUID(),
+        tool: spec.name,
+        tier: spec.tier,
+        args: parsed.data,
+        summary: summarizeCall(spec, parsed.data),
+      }
+      confirmed = await decideByPolicy(options.confirmPolicy, request)
+      await run.event({
+        type: 'confirm',
+        latencyMs: Date.now() - started,
+        payload: { ...request, args: clipForTrace(request.args), allowed: confirmed },
+      })
+      if (!confirmed) {
+        return emit('User declined. Do not retry without new instruction.', false, false)
+      }
     }
   }
 

@@ -36,13 +36,14 @@ export {
   requireAccount,
 } from './repo/accounts'
 export {
-  appendMessages,
   createConversation,
   latestConversation,
   loadHistory,
+  replaceHistory,
   saveSuspendedTurn,
   takeSuspendedTurn,
 } from './repo/conversations'
+export { ensureLedger } from './repo/demo'
 export {
   deleteOwnerRows,
   OWNER_SCOPED_TABLES,

@@ -1,6 +1,6 @@
 import type { SuspendedState } from '@kakeibo/core/suspend'
 import type { CanonicalMessage } from '@kakeibo/core/types'
-import { and, desc, eq, sql } from 'drizzle-orm'
+import { and, desc, eq } from 'drizzle-orm'
 import { withOwner } from '../db'
 import type { OwnerId } from '../owner'
 import { conversationMessages, conversations, suspendedTurns } from '../schema'
@@ -47,43 +47,49 @@ export async function latestConversation(
 }
 
 /**
- * Appends messages to the end of a thread.
+ * Makes the stored thread exactly `messages`, in one transaction.
  *
- * The sequence continues from what is stored, computed inside the same
- * transaction as the insert. Two writers racing on one conversation collide on
- * `conversation_messages_conversation_seq_key` rather than quietly interleaving
- * into a history that the provider will reject on the next request.
+ * Replace rather than append, which looks wasteful and is not. The context
+ * manager can *rewrite* history: when the window fills it replaces a run of
+ * older messages with a summary. An append-only table cannot express that, so
+ * the stored history would drift from the one the loop actually reasons over —
+ * and the next turn would be built from messages the model has not seen.
+ *
+ * It also makes suspend and resume trivially correct. A suspended turn stores
+ * nothing here, because its history ends on an assistant message whose tool
+ * calls are unanswered and opening the next turn with that shape is a hard 400.
+ * Resume then writes the whole finished turn at once, rather than a delta
+ * nobody could compute after an eviction.
  */
-export async function appendMessages(
+export async function replaceHistory(
   owner: OwnerId,
   conversationId: string,
   messages: CanonicalMessage[],
 ): Promise<void> {
-  if (messages.length === 0) return
-
   await withOwner(owner, async (tx) => {
-    const [row] = await tx
-      .select({ maxSeq: sql<number>`coalesce(max(${conversationMessages.seq}), -1)::int` })
-      .from(conversationMessages)
+    await tx
+      .delete(conversationMessages)
       .where(
         and(
           eq(conversationMessages.ownerId, owner),
           eq(conversationMessages.conversationId, conversationId),
         ),
       )
-    let seq = Number(row?.maxSeq ?? -1) + 1
 
-    await tx.insert(conversationMessages).values(
-      messages.map((message) => ({
-        ownerId: owner,
-        conversationId,
-        seq: seq++,
-        // Verbatim. No mapping, no field selection: `providerMeta` carries
-        // Gemini's opaque thoughtSignature and dropping it is a hard 400 on
-        // the next request, on tool turns only.
-        message: message as unknown as object,
-      })),
-    )
+    if (messages.length > 0) {
+      await tx.insert(conversationMessages).values(
+        messages.map((message, seq) => ({
+          ownerId: owner,
+          conversationId,
+          seq,
+          // Verbatim. No mapping, no field selection: `providerMeta` carries
+          // Gemini's opaque thoughtSignature, and dropping it is a hard 400 on
+          // the next request — on tool turns only, so it passes every test
+          // that does not look for it.
+          message: message as unknown as object,
+        })),
+      )
+    }
 
     await tx
       .update(conversations)

@@ -7,10 +7,10 @@ import { minorToDecimalString } from './money'
 import { asOwnerId, type OwnerId } from './owner'
 import { accountBalances, ensureSeedAccounts, listAccounts } from './repo/accounts'
 import {
-  appendMessages,
   createConversation,
   latestConversation,
   loadHistory,
+  replaceHistory,
   saveSuspendedTurn,
   takeSuspendedTurn,
 } from './repo/conversations'
@@ -82,7 +82,7 @@ beforeAll(async () => {
 
   const conversation = await createConversation(alice, 'Alice thinking aloud')
   aliceConversation = conversation.id
-  await appendMessages(alice, aliceConversation, [
+  await replaceHistory(alice, aliceConversation, [
     { role: 'user', content: [{ type: 'text', text: 'what did I spend on groceries?' }] },
   ])
   aliceSuspendedTurn = await saveSuspendedTurn(alice, aliceConversation, {

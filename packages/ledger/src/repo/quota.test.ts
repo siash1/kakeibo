@@ -169,9 +169,13 @@ describe('consumeQuota', () => {
     // The layer that protects a personal card. Checked independently of the
     // other two, and it applies to resumes as well, because resuming makes
     // fresh model calls.
-    await spend(solo, 1, 0.5)
-    expect(await spendToday()).toBeGreaterThanOrEqual(0.5)
-    setBudget(0.1)
+    // A tenth of a cent, not a realistic day's worth. The cap is relative to
+    // the configured ceiling, and a test that left half a dollar of fake spend
+    // behind would trip the real ceiling for the rest of the developer's day.
+    const before = await spendToday()
+    await spend(solo, 1, 0.001)
+    expect(await spendToday()).toBeGreaterThan(before)
+    setBudget(0.0000001)
 
     expect(await consumeQuota({ owner: solo, isAnonymous: true, kind: 'message' })).toMatchObject({
       allowed: false,

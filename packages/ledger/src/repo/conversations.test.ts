@@ -5,10 +5,10 @@ import { closeDb } from '../db'
 import { asOwnerId } from '../owner'
 import { resetOwners } from '../testing'
 import {
-  appendMessages,
   createConversation,
   latestConversation,
   loadHistory,
+  replaceHistory,
   saveSuspendedTurn,
   takeSuspendedTurn,
 } from './conversations'
@@ -42,7 +42,7 @@ const toolTurn: CanonicalMessage = {
 describe('conversation history', () => {
   it('round-trips providerMeta, including the thought signature', async () => {
     const conversation = await createConversation(owner)
-    await appendMessages(owner, conversation.id, [toolTurn])
+    await replaceHistory(owner, conversation.id, [toolTurn])
 
     const history = await loadHistory(owner, conversation.id)
     const block = history[0]?.content[0]
@@ -56,13 +56,11 @@ describe('conversation history', () => {
     expect(history).toEqual([toolTurn])
   })
 
-  it('keeps messages in the order they were appended, across calls', async () => {
+  it('keeps messages in the order they were written', async () => {
     const conversation = await createConversation(owner)
-    await appendMessages(owner, conversation.id, [
+    await replaceHistory(owner, conversation.id, [
       { role: 'user', content: [{ type: 'text', text: 'one' }] },
       { role: 'assistant', content: [{ type: 'text', text: 'two' }] },
-    ])
-    await appendMessages(owner, conversation.id, [
       { role: 'user', content: [{ type: 'text', text: 'three' }] },
     ])
 
@@ -74,9 +72,32 @@ describe('conversation history', () => {
     ])
   })
 
+  it('lets a summarised window replace the messages it evicted', async () => {
+    // The reason this replaces rather than appends. When the window fills, the
+    // context manager swaps a run of older messages for one summary; an
+    // append-only table would keep feeding the model messages it no longer
+    // reasons over, and the stored history would stop matching the live one.
+    const conversation = await createConversation(owner)
+    await replaceHistory(owner, conversation.id, [
+      { role: 'user', content: [{ type: 'text', text: 'one' }] },
+      { role: 'assistant', content: [{ type: 'text', text: 'two' }] },
+      { role: 'user', content: [{ type: 'text', text: 'three' }] },
+    ])
+    await replaceHistory(owner, conversation.id, [
+      { role: 'user', content: [{ type: 'text', text: 'summary of one and two' }] },
+      { role: 'user', content: [{ type: 'text', text: 'three' }] },
+    ])
+
+    const history = await loadHistory(owner, conversation.id)
+    expect(history.map((m) => (m.content[0] as { text: string }).text)).toEqual([
+      'summary of one and two',
+      'three',
+    ])
+  })
+
   it('will not load another owner conversation', async () => {
     const mine = await createConversation(owner)
-    await appendMessages(owner, mine.id, [{ role: 'user', content: [{ type: 'text', text: 'x' }] }])
+    await replaceHistory(owner, mine.id, [{ role: 'user', content: [{ type: 'text', text: 'x' }] }])
     expect(await loadHistory(other, mine.id)).toEqual([])
   })
 

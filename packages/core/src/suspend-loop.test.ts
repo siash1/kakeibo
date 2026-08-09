@@ -174,5 +174,18 @@ describe('resume', () => {
     // One trace, and the pre-pause spend is included.
     expect(result.runId).toBe(suspended.runId)
     expect(result.usage.inputTokens).toBeGreaterThan(suspended.suspended!.usage.inputTokens)
+
+    // Exactly two confirm events for two proposed writes: one recorded when the
+    // turn paused, one when it was answered. A third would mean the resume path
+    // and executeToolUse each recorded the same decision, which doubles every
+    // "writes allowed" figure computed from the timeline.
+    const confirms = tracer.runs[0]!.events.filter((e) => e.type === 'confirm')
+    expect(confirms).toHaveLength(4)
+    expect(confirms.map((e) => (e.payload as { allowed: boolean | null }).allowed)).toEqual([
+      null,
+      null,
+      true,
+      false,
+    ])
   })
 })
