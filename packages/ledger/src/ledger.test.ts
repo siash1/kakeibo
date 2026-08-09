@@ -3,7 +3,7 @@ import { sql } from 'drizzle-orm'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { UNCATEGORIZED } from './categories'
 import { toCsv } from './csv'
-import { adminDb, closeDb, getDb } from './db'
+import { closeDb, withOwner } from './db'
 import { commitImport, planImport } from './import'
 import { minorToDecimalString } from './money'
 import { DEV_OWNER_ID } from './owner'
@@ -25,6 +25,7 @@ import {
 } from './repo/transactions'
 import { setBudget } from './repo/writes'
 import { generateSeedData } from './seed/generate'
+import { resetOwner } from './testing'
 
 /**
  * Ledger integration tests against a real Postgres (spec 7).
@@ -39,9 +40,11 @@ loadEnv()
 const seed = generateSeedData()
 
 async function reseed(): Promise<void> {
-  await getDb().execute(
-    sql`truncate table trace_events, trace_runs, postings, transactions, import_batches, budgets, rules, memories, accounts restart identity cascade`,
-  )
+  // resetOwner rather than TRUNCATE: the app role is deliberately not granted
+  // TRUNCATE, and wiping every owner's data is precisely what it must not be
+  // able to do. Scoping the reset to this suite's owner is also more correct —
+  // it no longer destroys another suite's fixtures.
+  await resetOwner(DEV_OWNER_ID)
   await ensureSeedAccounts(DEV_OWNER_ID)
   const csv = toCsv(
     seed.rows.map((row) => ({
@@ -125,9 +128,11 @@ describe('double-entry invariant', () => {
 
 describe('seed data', () => {
   it('imports every generated row', async () => {
-    const [row] = await getDb()
-      .execute<{ count: string }>(sql`select count(*)::text as count from transactions`)
-      .then((r) => r.rows as { count: string }[])
+    const [row] = await withOwner(DEV_OWNER_ID, (tx) =>
+      tx
+        .execute<{ count: string }>(sql`select count(*)::text as count from transactions`)
+        .then((r) => r.rows as { count: string }[]),
+    )
     expect(Number(row?.count)).toBe(seed.rows.length)
   })
 
@@ -160,13 +165,15 @@ describe('reports', () => {
     const groups = await spendReport(DEV_OWNER_ID, period, 'category')
     const fromReport = groups.reduce((sum, g) => sum + g.totalMinor, 0)
 
-    const result = await getDb().execute<{ total: string }>(sql`
+    const result = await withOwner(DEV_OWNER_ID, (tx) =>
+      tx.execute<{ total: string }>(sql`
       select coalesce(sum(p.amount_minor), 0)::text as total
       from postings p
       join transactions t on t.id = p.transaction_id
       join accounts a on a.id = p.account_id
       where a.type = 'expense' and t.date between ${period.from} and ${period.to}
-    `)
+    `),
+    )
     const fromSql = Number((result.rows as { total: string }[])[0]?.total)
 
     expect(fromReport).toBe(fromSql)

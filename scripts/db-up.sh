@@ -68,4 +68,24 @@ if ! PGPASSWORD="$PASSWORD" psql -h localhost -p "$PORT" -U "$USER_NAME" -d post
   PGPASSWORD="$PASSWORD" createdb -h localhost -p "$PORT" -U "$USER_NAME" "$DB"
 fi
 
+# The application role. Distinct from the owning role above: app_user does NOT
+# own the tables, so row-level security applies to it — which is what makes the
+# RLS policies a real backstop rather than decoration.
+#
+# Created here rather than in a migration for two reasons: roles are
+# cluster-level objects rather than schema, and the password must not live in
+# git. This one is a local development convenience exactly like the
+# kakeibo/kakeibo pair above; production (Neon) creates the role out of band and
+# supplies its credentials through APP_DATABASE_URL.
+PGPASSWORD="$PASSWORD" psql -h localhost -p "$PORT" -U "$USER_NAME" -d "$DB" -q <<'SQL'
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'app_user') THEN
+    CREATE ROLE app_user LOGIN PASSWORD 'app_user';
+  END IF;
+END
+$$;
+SQL
+log "app_user role ready (row-level security applies to it)"
+
 log "ready on localhost:$PORT (local cluster, $(postgres -V | awk '{print $3}'))"
