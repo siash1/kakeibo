@@ -5,6 +5,7 @@ import { user } from '../auth-schema'
 import { adminDb } from '../db'
 import type { OwnerId } from '../owner'
 import { rateLimits, traceRuns } from '../schema'
+import { isLiveChatPaused } from './flags'
 
 /**
  * Cost control (spec §5).
@@ -21,7 +22,7 @@ import { rateLimits, traceRuns } from '../schema'
  * on the way through.
  */
 
-export type QuotaReason = 'blocked' | 'owner_quota' | 'ip_quota' | 'daily_cap'
+export type QuotaReason = 'paused' | 'blocked' | 'owner_quota' | 'ip_quota' | 'daily_cap'
 
 export type QuotaVerdict =
   | { allowed: true; used: { owner: number; ip: number } }
@@ -100,7 +101,8 @@ async function isBlocked(owner: OwnerId): Promise<boolean> {
 export async function consumeQuota(input: QuotaInput): Promise<QuotaVerdict> {
   const config = env()
 
-  // Cheapest first, and blocked is both the cheapest and the most absolute.
+  // Cheapest first, and these two are both the cheapest and the most absolute.
+  if (await isLiveChatPaused()) return { allowed: false, reason: 'paused' }
   if (await isBlocked(input.owner)) return { allowed: false, reason: 'blocked' }
 
   const owner = await messagesToday(input.owner)

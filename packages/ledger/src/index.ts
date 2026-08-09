@@ -44,6 +44,7 @@ export {
   takeSuspendedTurn,
 } from './repo/conversations'
 export { ensureLedger } from './repo/demo'
+export { isLiveChatPaused, type OperatorFlag, setFlag } from './repo/flags'
 export {
   deleteOwnerRows,
   OWNER_SCOPED_TABLES,

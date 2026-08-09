@@ -1,5 +1,6 @@
 import {
   bigint,
+  boolean,
   char,
   date,
   doublePrecision,
@@ -322,6 +323,20 @@ export const rateLimits = pgTable('rate_limits', {
   count: integer('count').notNull().default(0),
 })
 
+/**
+ * Operator switches (spec §9.4).
+ *
+ * A table rather than an environment variable because an env change is a
+ * redeploy, and the point of a kill switch is that it works during an incident,
+ * from a phone, in seconds. Not owner-scoped and deliberately without an RLS
+ * policy: it is a property of the site, not of a visitor.
+ */
+export const operatorFlags = pgTable('operator_flags', {
+  key: text('key').primaryKey(),
+  value: boolean('value').notNull().default(false),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
 export type Account = typeof accounts.$inferSelect
 export type Transaction = typeof transactions.$inferSelect
 export type Posting = typeof postings.$inferSelect
@@ -335,3 +350,4 @@ export type Conversation = typeof conversations.$inferSelect
 export type ConversationMessage = typeof conversationMessages.$inferSelect
 export type SuspendedTurnRow = typeof suspendedTurns.$inferSelect
 export type RateLimit = typeof rateLimits.$inferSelect
+export type OperatorFlagRow = typeof operatorFlags.$inferSelect

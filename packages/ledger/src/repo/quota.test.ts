@@ -1,10 +1,11 @@
 import { loadEnv, resetEnvCache } from '@kakeibo/core/env'
 import { eq } from 'drizzle-orm'
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { user } from '../auth-schema'
 import { adminDb, closeDb } from '../db'
 import { asOwnerId, type OwnerId } from '../owner'
 import { resetOwners } from '../testing'
+import { setFlag } from './flags'
 import { consumeQuota, hashIp, spendToday } from './quota'
 import { DbTracer } from './tracer'
 
@@ -53,6 +54,10 @@ beforeAll(async () => {
 beforeEach(async () => {
   // The address counter is global by design, so each test wants its own keys.
   await adminDb().execute(`delete from rate_limits where key like 'test-%'`)
+})
+
+afterEach(async () => {
+  await setFlag('live_chat_paused', false)
 })
 
 afterAll(async () => {
@@ -163,6 +168,26 @@ describe('consumeQuota', () => {
     const verdict = await consumeQuota({ owner: solo, ipHash, isAnonymous: true, kind: 'message' })
     expect(verdict.allowed).toBe(true)
     if (verdict.allowed) expect(verdict.used.ip).toBe(1)
+  })
+
+  it('refuses everyone while live chat is paused, and lets them back afterwards', async () => {
+    // The manual kill switch, independent of the budget trip. It has to stop
+    // resumes too: pausing during an incident that is only ever going to stop
+    // *new* turns is not a kill switch.
+    await setFlag('live_chat_paused', true)
+    expect(await consumeQuota({ owner: solo, isAnonymous: true, kind: 'message' })).toMatchObject({
+      allowed: false,
+      reason: 'paused',
+    })
+    expect(await consumeQuota({ owner: solo, isAnonymous: false, kind: 'resume' })).toMatchObject({
+      allowed: false,
+      reason: 'paused',
+    })
+
+    await setFlag('live_chat_paused', false)
+    expect((await consumeQuota({ owner: solo, isAnonymous: true, kind: 'message' })).allowed).toBe(
+      true,
+    )
   })
 
   it('stops everyone once the day costs more than the ceiling', async () => {

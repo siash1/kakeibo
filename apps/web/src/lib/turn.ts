@@ -147,6 +147,7 @@ export function sseResponse(
  */
 export function quotaRefusal(reason: QuotaReason, setCookie?: string): Response {
   const messages: Record<QuotaReason, string> = {
+    paused: 'kakeibo’s live chat is paused. The recorded demo still works.',
     blocked: 'This session has been paused by the operator.',
     owner_quota: 'You have reached today’s message limit for this session.',
     ip_quota: 'This network has reached today’s message limit.',
