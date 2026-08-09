@@ -58,6 +58,7 @@ export {
   type QuotaVerdict,
   spendToday,
 } from './repo/quota'
+export { type ReapResult, reap } from './repo/reaper'
 export {
   type Anomaly,
   budgetStatus,
