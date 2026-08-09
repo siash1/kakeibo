@@ -2,7 +2,7 @@ import { env } from '@kakeibo/core/env'
 import { and, countDistinct, eq, gte, sql } from 'drizzle-orm'
 import { user } from '../auth-schema'
 import { adminDb } from '../db'
-import { traceRuns } from '../schema'
+import { traceEvents, traceRuns } from '../schema'
 import { isLiveChatPaused } from './flags'
 
 /**
@@ -256,4 +256,198 @@ export async function trafficPanel(_session: AdminSession): Promise<TrafficPanel
     conversionPercent: total === 0 ? 0 : Math.round((signedIn / total) * 1000) / 10,
     returning: Number(returningRow?.n ?? 0),
   }
+}
+
+/**
+ * The trailing window the health, safety and tools panels aggregate over.
+ *
+ * Built from `UTC_DAY_START`, not from a bare `current_date`: the latter casts
+ * back through the session's timezone (`Asia/Kolkata` on this database) and
+ * would silently shift the window by that offset, the same bug the sparkline
+ * and month-to-date bounds above were fixed for.
+ */
+const WINDOW = sql`${UTC_DAY_START} - ${DAYS} * interval '1 day'`
+
+export interface HealthPanel {
+  byStatus: { ok: number; error: number; blocked: number; aborted: number }
+  p50LatencyMs: number
+  p95LatencyMs: number
+  iterationLimitHits: number
+  toolErrorPercent: number
+}
+
+export interface SafetyPanel {
+  proposed: number
+  allowed: number
+  declined: number
+  awaiting: number
+  imports: number
+  blockedRuns: { runId: string; reason: string }[]
+}
+
+export interface ToolStat {
+  name: string
+  calls: number
+  errorPercent: number
+  medianLatencyMs: number
+}
+
+/** Is the site working (spec §9.3, item 3): run outcomes and how long they take. */
+export async function healthPanel(_session: AdminSession): Promise<HealthPanel> {
+  const db = unscoped()
+
+  const [row] = await db
+    .select({
+      ok: sql<string>`count(*) filter (where ${traceRuns.status} = 'ok')`,
+      error: sql<string>`count(*) filter (where ${traceRuns.status} = 'error')`,
+      blocked: sql<string>`count(*) filter (where ${traceRuns.status} = 'blocked')`,
+      aborted: sql<string>`count(*) filter (where ${traceRuns.status} = 'aborted')`,
+      // percentile_cont over latency_ms, which is exact rather than sampled —
+      // at this volume there is no reason to approximate.
+      p50: sql<string>`coalesce(percentile_cont(0.5) within group (order by ${traceRuns.latencyMs}), 0)`,
+      p95: sql<string>`coalesce(percentile_cont(0.95) within group (order by ${traceRuns.latencyMs}), 0)`,
+    })
+    .from(traceRuns)
+    .where(gte(traceRuns.startedAt, WINDOW))
+
+  const [tools] = await db
+    .select({
+      calls: sql<string>`count(*) filter (where ${traceEvents.type} = 'tool_call')`,
+      errors: sql<string>`count(*) filter (where ${traceEvents.type} = 'tool_call' and ${traceEvents.payload} ? 'error')`,
+      iterationLimits: sql<string>`count(*) filter (where ${traceEvents.type} = 'error' and ${traceEvents.payload}->>'kind' = 'iteration_limit')`,
+    })
+    .from(traceEvents)
+    .innerJoin(traceRuns, eq(traceRuns.id, traceEvents.runId))
+    .where(gte(traceRuns.startedAt, WINDOW))
+
+  const calls = Number(tools?.calls ?? 0)
+  const errors = Number(tools?.errors ?? 0)
+
+  return {
+    byStatus: {
+      ok: Number(row?.ok ?? 0),
+      error: Number(row?.error ?? 0),
+      blocked: Number(row?.blocked ?? 0),
+      aborted: Number(row?.aborted ?? 0),
+    },
+    p50LatencyMs: Math.round(Number(row?.p50 ?? 0)),
+    p95LatencyMs: Math.round(Number(row?.p95 ?? 0)),
+    iterationLimitHits: Number(tools?.iterationLimits ?? 0),
+    // A percentage, and 0 rather than NaN when no tool has run at all.
+    toolErrorPercent: calls === 0 ? 0 : Math.round((errors / calls) * 1000) / 10,
+  }
+}
+
+/**
+ * Is the write-confirmation guardrail doing its job (spec §9.3, item 4).
+ *
+ * The panel counts *decisions*, not rows. A write under the `suspend` policy
+ * writes two `confirm` events — one at suspension with `allowed: null` and
+ * `suspended: true`, one at resume with `allowed` set — while `inline` and
+ * `auto-*` writes produce one, already decided. Counting rows naively would
+ * double every suspended write and report the guardrail as busier than it is.
+ * `allowed` and `declined` come straight from the decided events; `awaiting`
+ * is a suspension event with no answered sibling sharing `(run_id,
+ * payload->>'id')` — a confirmation card nobody ever ruled on.
+ */
+export async function safetyPanel(_session: AdminSession): Promise<SafetyPanel> {
+  const db = unscoped()
+
+  const [decisions] = await db
+    .select({
+      allowed: sql<string>`count(*) filter (where ${traceEvents.payload}->>'allowed' = 'true')`,
+      declined: sql<string>`count(*) filter (where ${traceEvents.payload}->>'allowed' = 'false')`,
+      awaiting: sql<string>`count(*) filter (
+        where ${traceEvents.payload}->>'suspended' = 'true'
+          and not exists (
+            select 1 from trace_events answered
+            where answered.run_id = ${traceEvents.runId}
+              and answered.payload->>'id' = ${traceEvents.payload}->>'id'
+              and answered.payload->>'allowed' is not null
+          )
+      )`,
+    })
+    .from(traceEvents)
+    .innerJoin(traceRuns, eq(traceRuns.id, traceEvents.runId))
+    .where(and(eq(traceEvents.type, 'confirm'), gte(traceRuns.startedAt, WINDOW)))
+
+  const [imports] = await db
+    .select({ n: sql<string>`count(*)` })
+    .from(traceEvents)
+    .innerJoin(traceRuns, eq(traceRuns.id, traceEvents.runId))
+    .where(
+      and(
+        eq(traceEvents.type, 'tool_call'),
+        sql`${traceEvents.payload}->>'name' = 'import_statement_csv'`,
+        gte(traceRuns.startedAt, WINDOW),
+      ),
+    )
+
+  const blockedRuns = await db
+    .select({
+      runId: traceEvents.runId,
+      reason: sql<string>`coalesce(${traceEvents.payload}->>'message', 'no reason recorded')`,
+    })
+    .from(traceEvents)
+    .innerJoin(traceRuns, eq(traceRuns.id, traceEvents.runId))
+    .where(
+      and(
+        eq(traceEvents.type, 'error'),
+        sql`${traceEvents.payload}->>'kind' = 'blocked'`,
+        gte(traceRuns.startedAt, WINDOW),
+      ),
+    )
+    .limit(20)
+
+  const allowed = Number(decisions?.allowed ?? 0)
+  const declined = Number(decisions?.declined ?? 0)
+  const awaiting = Number(decisions?.awaiting ?? 0)
+
+  return {
+    proposed: allowed + declined + awaiting,
+    allowed,
+    declined,
+    awaiting,
+    imports: Number(imports?.n ?? 0),
+    blockedRuns,
+  }
+}
+
+/** Which tools are actually earning selection (spec §9.3, item 5). */
+export async function toolsPanel(_session: AdminSession): Promise<ToolStat[]> {
+  const db = unscoped()
+
+  const rows = await db
+    .select({
+      name: sql<string>`${traceEvents.payload}->>'name'`,
+      calls: sql<string>`count(*)`,
+      errors: sql<string>`count(*) filter (where ${traceEvents.payload} ? 'error')`,
+      median: sql<string>`coalesce(percentile_cont(0.5) within group (order by ${traceEvents.latencyMs}), 0)`,
+    })
+    .from(traceEvents)
+    .innerJoin(traceRuns, eq(traceRuns.id, traceEvents.runId))
+    .where(
+      and(
+        eq(traceEvents.type, 'tool_call'),
+        sql`${traceEvents.payload}->>'name' is not null`,
+        gte(traceRuns.startedAt, WINDOW),
+      ),
+    )
+    .groupBy(sql`1`)
+
+  return (
+    rows
+      .map((row) => {
+        const calls = Number(row.calls)
+        return {
+          name: row.name,
+          calls,
+          errorPercent: calls === 0 ? 0 : Math.round((Number(row.errors) / calls) * 1000) / 10,
+          medianLatencyMs: Math.round(Number(row.median)),
+        }
+      })
+      // Busiest first: this panel exists to show which tool descriptions are
+      // earning selection and which are not.
+      .sort((a, b) => b.calls - a.calls || a.name.localeCompare(b.name))
+  )
 }

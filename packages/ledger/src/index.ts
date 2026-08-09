@@ -41,7 +41,13 @@ export {
   assertAdmin,
   type BudgetPanel,
   budgetPanel,
+  type HealthPanel,
+  healthPanel,
+  type SafetyPanel,
+  safetyPanel,
+  type ToolStat,
   type TrafficPanel,
+  toolsPanel,
   trafficPanel,
 } from './repo/admin'
 export {
