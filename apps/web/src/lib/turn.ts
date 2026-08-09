@@ -1,4 +1,5 @@
 import { ContextManager, createAdapter, env, type TurnResult } from '@kakeibo/core'
+import type { RunGeo } from '@kakeibo/core/trace'
 import {
   createRegistry,
   DbMemoryStore,
@@ -22,12 +23,12 @@ import {
 export type Send = (event: string, data: unknown) => void
 
 /** Per-request, not per-process: every one of these is bound to one owner. */
-export function agentDependencies(owner: OwnerId) {
+export function agentDependencies(owner: OwnerId, geo?: RunGeo) {
   const config = env()
   return {
     adapter: createAdapter(),
     registry: createRegistry(owner),
-    tracer: new DbTracer(owner),
+    tracer: new DbTracer(owner, geo),
     memory: new DbMemoryStore(owner),
     contextManager: new ContextManager(),
     model: config.AGENT_MODEL,

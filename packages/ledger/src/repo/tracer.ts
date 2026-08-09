@@ -1,6 +1,12 @@
 import { randomUUID } from 'node:crypto'
 import type { Channel } from '@kakeibo/core/registry'
-import type { RunFinish, TraceEventInput, TraceRunHandle, Tracer } from '@kakeibo/core/trace'
+import type {
+  RunFinish,
+  RunGeo,
+  TraceEventInput,
+  TraceRunHandle,
+  Tracer,
+} from '@kakeibo/core/trace'
 import { and, desc, eq, sql } from 'drizzle-orm'
 import { withOwner } from '../db'
 import type { OwnerId } from '../owner'
@@ -16,16 +22,22 @@ import { traceEvents, traceRuns } from '../schema'
  */
 export class DbTracer implements Tracer {
   // Owner is a constructor dependency, not a method parameter: Tracer is a
-  // core interface and core must not learn about tenancy.
-  constructor(private readonly owner: OwnerId) {}
+  // core interface and core must not learn about tenancy. Geo travels the same
+  // way, since it too is resolved once per request rather than per call.
+  constructor(
+    private readonly owner: OwnerId,
+    private readonly geo?: RunGeo,
+  ) {}
 
   async startRun(info: {
     provider: string
     model: string
     channel: Channel
+    geo?: RunGeo
   }): Promise<TraceRunHandle> {
     const id = randomUUID()
     const owner = this.owner
+    const geo = info.geo ?? this.geo
     await withOwner(owner, (tx) =>
       tx.insert(traceRuns).values({
         id,
@@ -33,6 +45,11 @@ export class DbTracer implements Tracer {
         provider: info.provider,
         model: info.model,
         channel: info.channel,
+        geoCountry: geo?.country ?? null,
+        geoRegion: geo?.region ?? null,
+        geoCity: geo?.city ?? null,
+        geoLat: geo?.lat ?? null,
+        geoLon: geo?.lon ?? null,
       }),
     )
     return this.handle(id, 0)

@@ -6,6 +6,7 @@ import {
   latestConversation,
   loadHistory,
 } from '@kakeibo/ledger'
+import { requestGeo } from '@/lib/geo'
 import { requestIpHash, resolveOwner } from '@/lib/owner'
 import { agentDependencies, completeTurn, quotaRefusal, sseResponse } from '@/lib/turn'
 
@@ -60,7 +61,7 @@ export async function POST(request: Request): Promise<Response> {
     request.signal.addEventListener('abort', () => abort.abort())
 
     const result = await runTurn({
-      ...agentDependencies(owner),
+      ...agentDependencies(owner, requestGeo(request)),
       userMessage: message,
       history,
       signal: abort.signal,

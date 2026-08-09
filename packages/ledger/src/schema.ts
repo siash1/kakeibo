@@ -2,6 +2,7 @@ import {
   bigint,
   char,
   date,
+  doublePrecision,
   index,
   integer,
   jsonb,
@@ -179,6 +180,19 @@ export const traceRuns = pgTable(
     costUsdEst: numeric('cost_usd_est', { precision: 10, scale: 6 }).notNull().default('0'),
     latencyMs: integer('latency_ms').notNull().default(0),
     channel: channelEnum('channel').notNull(),
+    /**
+     * Coarse location, from the request address at the edge (spec §9.5).
+     *
+     * All nullable: absent in local development and for any address the edge
+     * cannot resolve, which the map is required to render without complaint.
+     * Stored per run rather than per user so the map shows activity rather than a
+     * roster of people, and so it ages out with trace data.
+     */
+    geoCountry: char('geo_country', { length: 2 }),
+    geoRegion: text('geo_region'),
+    geoCity: text('geo_city'),
+    geoLat: doublePrecision('geo_lat'),
+    geoLon: doublePrecision('geo_lon'),
   },
   (table) => [index('trace_runs_owner_started_idx').on(table.ownerId, table.startedAt)],
 )

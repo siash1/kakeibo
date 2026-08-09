@@ -44,8 +44,28 @@ export interface TraceRunHandle {
   finish(result: RunFinish): Promise<void>
 }
 
+/**
+ * A coarse, city-level location for one turn.
+ *
+ * Provider-neutral by design: core must not learn what Vercel is. Every field
+ * is optional because the edge resolves some addresses only partially, and all
+ * of them are absent in local development.
+ */
+export interface RunGeo {
+  country?: string
+  region?: string
+  city?: string
+  lat?: number
+  lon?: number
+}
+
 export interface Tracer {
-  startRun(info: { provider: string; model: string; channel: Channel }): Promise<TraceRunHandle>
+  startRun(info: {
+    provider: string
+    model: string
+    channel: Channel
+    geo?: RunGeo
+  }): Promise<TraceRunHandle>
   /**
    * Reopens an existing run so a suspended turn continues one trace.
    *
@@ -72,6 +92,7 @@ export class InMemoryTracer implements Tracer {
     provider: string
     model: string
     channel: Channel
+    geo?: RunGeo
   }): Promise<TraceRunHandle> {
     const id = randomUUID()
     const run = { id, ...info, startedAt: Date.now(), events: [] as TraceEventRecord[] }
