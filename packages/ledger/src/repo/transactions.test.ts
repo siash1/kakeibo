@@ -1,6 +1,7 @@
 import { loadEnv } from '@kakeibo/core/env'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { closeDb } from '../db'
+import { resetOwners } from '../testing'
 import { asOwnerId, type OwnerId } from '../owner'
 import { ensureSeedAccounts, requireAccount } from './accounts'
 import {
@@ -30,6 +31,7 @@ async function spend(owner: OwnerId, description: string, minor: number) {
 }
 
 beforeAll(async () => {
+  await resetOwners(alice, bob)
   await ensureSeedAccounts(alice)
   await ensureSeedAccounts(bob)
   await spend(alice, 'ALICE SECRET SHOP', 12345)

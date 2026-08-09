@@ -1,6 +1,7 @@
 import { loadEnv } from '@kakeibo/core/env'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { closeDb } from '../db'
+import { resetOwners } from '../testing'
 import { asOwnerId } from '../owner'
 import { accountByName, ensureSeedAccounts, listAccounts } from './accounts'
 
@@ -10,6 +11,7 @@ const alice = asOwnerId('00000000-0000-4000-8000-00000000a11c')
 const bob = asOwnerId('00000000-0000-4000-8000-00000000b0b0')
 
 beforeAll(async () => {
+  await resetOwners(alice, bob)
   await ensureSeedAccounts(alice)
   await ensureSeedAccounts(bob)
 }, 60_000)
