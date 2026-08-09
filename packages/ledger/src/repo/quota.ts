@@ -55,17 +55,40 @@ export function hashIp(ip: string, day = today()): string {
   return sha256(`${ip}|${env().RATE_LIMIT_SALT}|${day}`)
 }
 
-/** Today in the database's terms: a UTC date, matching `current_date`. */
+/**
+ * Today, as the JS `Date` sees it: always a UTC date, because `toISOString`
+ * is always UTC regardless of the host's local zone.
+ *
+ * `spendToday` and `messagesToday` below are pinned to `UTC_DAY_START` so
+ * their SQL bound lands on the same day this returns. Left as a bare
+ * `current_date`, Postgres evaluates it in the *session* timezone — on this
+ * database `Asia/Kolkata` — and casts it to a `timestamptz` at that zone's
+ * midnight, not UTC's. That would put this function and those two queries on
+ * different days for the 5.5 hours between session-local midnight and UTC
+ * midnight, which is exactly the bug this comment used to assert did not
+ * exist.
+ */
 function today(): string {
   return new Date().toISOString().slice(0, 10)
 }
+
+/**
+ * Midnight at the start of today, UTC, as a `timestamptz` instant.
+ *
+ * Duplicated from `admin.ts`'s `UTC_DAY_START` rather than imported from it:
+ * that module is the RLS-bypass door (see its file comment), and importing
+ * from it here would give the admin-containment test a second reason to name
+ * every module that reads it, for a one-line expression that is cheaper to
+ * copy than to share.
+ */
+const UTC_DAY_START = sql`(((now() at time zone 'utc')::date)::timestamp at time zone 'utc')`
 
 /** What every owner together has cost so far today, in USD. */
 export async function spendToday(): Promise<number> {
   const [row] = await adminDb()
     .select({ total: sql<string>`coalesce(sum(${traceRuns.costUsdEst}), 0)` })
     .from(traceRuns)
-    .where(gte(traceRuns.startedAt, sql`current_date`))
+    .where(gte(traceRuns.startedAt, UTC_DAY_START))
   return Number(row?.total ?? 0)
 }
 
@@ -74,7 +97,7 @@ export async function messagesToday(owner: OwnerId): Promise<number> {
   const [row] = await adminDb()
     .select({ count: sql<string>`count(*)` })
     .from(traceRuns)
-    .where(and(eq(traceRuns.ownerId, owner), gte(traceRuns.startedAt, sql`current_date`)))
+    .where(and(eq(traceRuns.ownerId, owner), gte(traceRuns.startedAt, UTC_DAY_START)))
   // One row per turn, and a suspended turn resumes into the row it already has
   // rather than opening a second — so this counts turns, not halves of them.
   return Number(row?.count ?? 0)

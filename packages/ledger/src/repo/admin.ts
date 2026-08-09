@@ -265,9 +265,13 @@ export async function trafficPanel(_session: AdminSession): Promise<TrafficPanel
         //
         // Casting forward, `created_at::timestamptz`, reinterprets that naive
         // wall-clock value in the session's *current* TimeZone and recovers the
-        // original instant — the exact inverse of the cast that stored it, and
-        // correct regardless of which zone the session happens to be (verified:
-        // `(now()::timestamp)::timestamptz = now()`). That is what belongs on
+        // original instant — the exact inverse of the cast that stored it — but
+        // only if the session zone at read time is the same one that was active
+        // at insert time (verified: `(now()::timestamp)::timestamptz = now()`
+        // holds within one session, not across a zone change between sessions).
+        // Nothing in this codebase pins that; the real fix is to make
+        // `user.created_at` a `timestamptz` in Better Auth's generated schema,
+        // which is not this query's to do. Until then this is what belongs on
         // the left of a `timestamptz` comparison.
         sql`(${user.createdAt}::timestamptz) < ${UTC_DAY_START}`,
       ),

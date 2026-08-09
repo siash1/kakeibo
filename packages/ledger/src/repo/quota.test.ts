@@ -1,12 +1,13 @@
 import { loadEnv, resetEnvCache } from '@kakeibo/core/env'
-import { eq } from 'drizzle-orm'
+import { eq, sql } from 'drizzle-orm'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { user } from '../auth-schema'
 import { adminDb, closeDb } from '../db'
 import { asOwnerId, type OwnerId } from '../owner'
+import { traceRuns } from '../schema'
 import { resetOwners } from '../testing'
 import { setFlag } from './flags'
-import { consumeQuota, hashIp, spendToday } from './quota'
+import { consumeQuota, hashIp, messagesToday, spendToday } from './quota'
 import { DbTracer } from './tracer'
 
 loadEnv()
@@ -66,6 +67,44 @@ afterAll(async () => {
   delete process.env.GLOBAL_DAILY_BUDGET_USD
   resetEnvCache()
   await closeDb()
+})
+
+describe('day boundary', () => {
+  // Placed ahead of `consumeQuota`'s tests deliberately: that describe's last
+  // case lowers GLOBAL_DAILY_BUDGET_USD and leaves it lowered until the file's
+  // `afterAll` runs, and this test has no business racing that.
+  it('counts a day as a UTC day, not the database session timezone', async () => {
+    // Between session-local midnight and UTC midnight a bare `current_date`
+    // bound counts yesterday's spend (and yesterday's messages) as today's. On
+    // a database whose session zone is Asia/Kolkata that is five and a half
+    // hours of every day, and it is the window in which the budget panel and
+    // the cap it reports disagree.
+    //
+    // This only fails against the pre-fix code when the session timezone is
+    // east of UTC — Asia/Kolkata here. Under UTC (Neon's default) or a zone
+    // west of Greenwich (e.g. America/Los_Angeles), session-local midnight
+    // falls on or after UTC midnight, so the row below lands before both
+    // bounds and the bug has no window to hide in. Do not read a pass on those
+    // zones as the fix being verified; the three-zone run in the task report
+    // is what actually exercises this.
+    const spendBefore = await spendToday()
+    const messagesBefore = await messagesToday(solo)
+
+    await adminDb().insert(traceRuns).values({
+      ownerId: solo,
+      provider: 'test',
+      model: 'test',
+      channel: 'web',
+      status: 'ok',
+      costUsdEst: '0.010000',
+      // One hour before today's UTC midnight: yesterday in UTC terms, and
+      // still "today" to a session-local bound east of Greenwich.
+      startedAt: sql`(((now() at time zone 'utc')::date)::timestamp at time zone 'utc') - interval '1 hour'`,
+    })
+
+    expect(await spendToday()).toBeCloseTo(spendBefore, 6)
+    expect(await messagesToday(solo)).toBe(messagesBefore)
+  })
 })
 
 describe('consumeQuota', () => {
