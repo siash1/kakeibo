@@ -1,0 +1,1 @@
+kakeibo — a finance agent that shows its working. Twelve tools over a double-entry ledger, a hand-written loop, and a gate that stops before anything is written.

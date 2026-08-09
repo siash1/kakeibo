@@ -1,11 +1,49 @@
 @import 'tailwindcss';
+@import '@fontsource-variable/source-serif-4';
+@import '@fontsource-variable/public-sans';
 
 /*
- * Dark by default (spec 13). One accent, one surface ramp, monospace numerals
- * everywhere a figure appears — a ledger where the columns do not line up reads
- * as untrustworthy no matter how correct it is.
+ * Two genres, one site.
+ *
+ * The product surfaces — landing, chat, dashboard — are a 家計簿: a Japanese
+ * household account book. Warm paper, sumi ink, ruled hairlines, and no
+ * chromatic accent at all; emphasis comes from weight, scale and the rules
+ * themselves. The trace viewer and /admin keep the terminal they were born in,
+ * because that is the right genre for a machine's own record.
+ *
+ * The two never blend. Crossing from one to the other flips the ground
+ * completely, which is the point: you have stepped out of the product and into
+ * the machine room. Neither palette is `body`'s — each genre's layout owns its
+ * own ground, so a nested route can change worlds without fighting the root.
  */
+
 @theme {
+  /* ---- paper genre -------------------------------------------------- */
+  /* Warm, low-chroma, hue 85. Account-book paper is not magazine cream: it
+     is closer to a manila ledger sheet, and it holds a printed hairline. */
+  --color-paper-50: oklch(0.985 0.006 85);
+  --color-paper-100: oklch(0.968 0.009 85);
+  --color-paper-200: oklch(0.945 0.012 84);
+  --color-paper-300: oklch(0.906 0.014 83);
+
+  /* Sumi is a warm black, never a neutral one — ground charcoal in animal
+     glue reads brown-black on paper, and pure #000 on warm paper looks like
+     a hole punched in it. */
+  --color-sumi-900: oklch(0.205 0.014 62);
+  --color-sumi-800: oklch(0.285 0.014 62);
+  --color-sumi-600: oklch(0.44 0.012 65);
+  --color-sumi-500: oklch(0.545 0.010 68);
+  /* Two weights of rule, and the split is a contrast decision rather than a
+     stylistic one. `rule` is the 方眼 grid and hairline row separators —
+     decorative, 1.5:1 against paper, and deliberately below the threshold
+     because it must not compete with the figures sitting on it.
+     `rule-strong` carries meaning: chart baselines and axes, which WCAG 1.4.11
+     puts at 3:1 as graphics required to understand the content. Measured, not
+     guessed: L 0.74 came out at 2.2:1 and L 0.60 at 3.79:1. */
+  --color-rule: oklch(0.855 0.012 82);
+  --color-rule-strong: oklch(0.60 0.016 78);
+
+  /* ---- terminal genre (incumbent, unchanged) ------------------------ */
   --color-ink-950: oklch(0.16 0.008 265);
   --color-ink-900: oklch(0.19 0.009 265);
   --color-ink-850: oklch(0.22 0.010 265);
@@ -14,39 +52,172 @@
   --color-ink-500: oklch(0.55 0.014 265);
   --color-ink-300: oklch(0.74 0.012 265);
   --color-ink-100: oklch(0.93 0.006 265);
-
   --color-accent: oklch(0.72 0.14 195);
   --color-accent-dim: oklch(0.52 0.10 195);
+
+  /* ---- status, the only colour the paper genre gets ------------------ */
+  /* Two tunings of the same three meanings: the paper set is darkened until
+     it clears 4.5:1 on paper-50, the terminal set is the incumbent. */
+  --color-ok: oklch(0.74 0.15 155);
   --color-warn: oklch(0.78 0.15 78);
   --color-danger: oklch(0.66 0.18 25);
-  --color-ok: oklch(0.74 0.15 155);
+  --color-ok-ink: oklch(0.46 0.13 155);
+  --color-warn-ink: oklch(0.50 0.12 70);
+  --color-danger-ink: oklch(0.49 0.19 25);
 
+  --font-serif: 'Source Serif 4 Variable', Georgia, 'Times New Roman', serif;
+  --font-sans: 'Public Sans Variable', system-ui, -apple-system, sans-serif;
   --font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, monospace;
 }
 
 html {
-  color-scheme: dark;
+  /* Neither genre owns the root: each layout paints its own ground, so the
+     scrollbar gutter and overscroll match whichever world you are in. */
+  color-scheme: light dark;
 }
 
 body {
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  font-family: var(--font-sans);
+}
+
+/*
+ * A genre is a ground, a text colour and a selection — set once, inherited by
+ * everything inside it. `min-height: 100vh` on the wrapper rather than on body
+ * is what lets two of these coexist in one app.
+ */
+[data-genre='paper'] {
+  background: var(--color-paper-50);
+  color: var(--color-sumi-900);
+  color-scheme: light;
+  accent-color: var(--color-sumi-800);
+}
+
+[data-genre='terminal'] {
   background: var(--color-ink-950);
   color: var(--color-ink-100);
-  -webkit-font-smoothing: antialiased;
-}
-
-/* Tabular figures so amounts in a column align. */
-.num {
+  color-scheme: dark;
+  accent-color: var(--color-accent);
   font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
 }
 
-::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--color-ink-800); border-radius: 5px; }
-::-webkit-scrollbar-thumb:hover { background: var(--color-ink-700); }
+/* The parts nobody draws still carry the design. */
+[data-genre='paper'] ::selection {
+  background: var(--color-sumi-900);
+  color: var(--color-paper-50);
+}
+[data-genre='terminal'] ::selection {
+  background: var(--color-accent-dim);
+  color: var(--color-ink-100);
+}
+
+[data-genre='paper'] :focus-visible {
+  outline: 2px solid var(--color-sumi-900);
+  outline-offset: 2px;
+}
+[data-genre='terminal'] :focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+[data-genre='paper'] {
+  caret-color: var(--color-sumi-900);
+  scrollbar-color: var(--color-rule-strong) transparent;
+}
+[data-genre='terminal'] {
+  caret-color: var(--color-accent);
+  scrollbar-color: var(--color-ink-800) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+[data-genre='paper'] ::-webkit-scrollbar-thumb {
+  background: var(--color-rule-strong);
+  border-radius: 5px;
+}
+[data-genre='terminal'] ::-webkit-scrollbar-thumb {
+  background: var(--color-ink-800);
+  border-radius: 5px;
+}
+
+/*
+ * Tabular figures wherever an amount appears. A ledger whose columns do not
+ * line up reads as untrustworthy no matter how correct it is — this rule
+ * predates the redesign and outlives it.
+ */
+.num {
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: 'tnum' 1, 'lnum' 1;
+}
+[data-genre='terminal'] .num {
+  font-family: var(--font-mono);
+}
+[data-genre='paper'] .num {
+  font-family: var(--font-serif);
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+/*
+ * There is deliberately no 方眼 grid-paper texture here.
+ *
+ * An earlier pass shipped one, unused, with a comment claiming it did "real
+ * structural work: sections sit on it, and figures align to it". Nothing in the
+ * built pages ever aligned to it, which made the claim the CSS equivalent of an
+ * unmeasured number in the README — and a tiled hairline grid behind a hero is
+ * one of the most reliable tells of a generated interface, which the design
+ * detector flags on sight.
+ *
+ * The paper genre's material is the rules themselves: the section rules, the
+ * row hairlines, the double rule under a total. Those are load-bearing on every
+ * page, they are what the no-accent decision leans on for emphasis, and they
+ * need no field of decoration behind them. If a surface ever genuinely sets
+ * figures on a 24px grid, bring it back then, with the alignment that earns it.
+ */
+
+/* A ruled underline that sits below the baseline rather than through it. */
+[data-genre='paper'] a:not([class*='no-underline']) {
+  text-underline-offset: 0.22em;
+  text-decoration-thickness: from-font;
+}
+
+/*
+ * There is deliberately no entrance animation on the statement rows.
+ *
+ * A scroll-driven `view()` reveal was built here and then removed after a
+ * screenshot showed what it actually does: the rows start at opacity 0 and only
+ * the ones the timeline has reached are legible, so a full-page capture — and,
+ * equally, printing, an in-page find, or a deep link landing mid-document —
+ * shows a statement with a hole in the middle of it. The craft rule it broke is
+ * the plain one: animate from an already-visible default, never into existence.
+ *
+ * The motion this product actually has is not decorative and is already built:
+ * on /chat the margin entries post one at a time as the agent calls each tool,
+ * driven by the stream rather than by the scrollbar. That is the authored
+ * moment, and it is real.
+ */
 
 @keyframes pulse-dot {
-  0%, 100% { opacity: 0.35; }
-  50% { opacity: 1; }
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
 }
-.pulse-dot { animation: pulse-dot 1.2s ease-in-out infinite; }
+.pulse-dot {
+  animation: pulse-dot 1.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pulse-dot {
+    animation: none;
+    opacity: 0.7;
+  }
+}

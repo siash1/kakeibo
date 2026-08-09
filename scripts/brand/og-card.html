@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <!--
+      The source of apps/web/src/app/opengraph-image.jpg.
+
+      Rendered by a real browser so every glyph is the actual Source Serif 4 —
+      the model generates the paper underneath and never the lettering. The
+      figures below are the measured ones; they must match what the landing page
+      reads out of evals/report/latest.json. See scripts/brand/imagen.py for the
+      full regeneration recipe.
+    -->
+    <meta charset="utf-8" />
+    <style>
+      @font-face {
+        font-family: 'Source Serif 4 Variable';
+        src: url('../../node_modules/.pnpm/@fontsource-variable+source-serif-4@5.3.0/node_modules/@fontsource-variable/source-serif-4/files/source-serif-4-latin-wght-normal.woff2')
+          format('woff2-variations');
+        font-weight: 200 900;
+      }
+      @font-face {
+        font-family: 'Public Sans Variable';
+        src: url('../../node_modules/.pnpm/@fontsource-variable+public-sans@5.3.0/node_modules/@fontsource-variable/public-sans/files/public-sans-latin-wght-normal.woff2')
+          format('woff2-variations');
+        font-weight: 100 900;
+      }
+
+      /* The site's own tokens. */
+      :root {
+        --sumi-900: oklch(0.205 0.014 62);
+        --sumi-600: oklch(0.44 0.012 65);
+        --sumi-500: oklch(0.545 0.01 68);
+      }
+
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+
+      body {
+        width: 1200px;
+        height: 630px;
+        overflow: hidden;
+        position: relative;
+        font-family: 'Public Sans Variable', system-ui, sans-serif;
+        color: var(--sumi-900);
+        -webkit-font-smoothing: antialiased;
+      }
+
+      .plate {
+        position: absolute;
+        inset: 0;
+        background-image: url('../../.brand-out/og-paper.png');
+        background-size: cover;
+        background-position: center;
+      }
+
+      /* The plate is warmer than the site's paper; this lifts it toward the
+         product ground without washing the printed rules out entirely. */
+      .wash { position: absolute; inset: 0; background: oklch(0.985 0.006 85 / 0.42); }
+
+      .content {
+        position: relative;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        padding: 62px 72px 58px;
+      }
+
+      .wordmark { display: flex; align-items: baseline; gap: 12px; }
+      .wordmark svg { width: 26px; height: 26px; transform: translateY(3px); opacity: 0.9; }
+      .wordmark .name {
+        font-family: 'Source Serif 4 Variable', Georgia, serif;
+        font-weight: 600;
+        font-size: 26px;
+        letter-spacing: -0.015em;
+      }
+      .wordmark .kanji { font-size: 16px; letter-spacing: 0.08em; opacity: 0.5; }
+
+      h1 {
+        font-family: 'Source Serif 4 Variable', Georgia, serif;
+        font-weight: 400;
+        font-size: 74px;
+        line-height: 1.03;
+        letter-spacing: -0.03em;
+        max-width: 17ch;
+      }
+
+      .sub {
+        margin-top: 22px;
+        font-size: 21px;
+        line-height: 1.5;
+        color: var(--sumi-600);
+        max-width: 52ch;
+      }
+
+      .foot {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 32px;
+        border-top: 1.5px solid var(--sumi-900);
+        padding-top: 16px;
+      }
+      .figures { display: flex; gap: 34px; }
+      .figures div { display: flex; align-items: baseline; gap: 9px; }
+      .figures .n {
+        font-family: 'Source Serif 4 Variable', Georgia, serif;
+        font-size: 27px;
+        font-variant-numeric: tabular-nums lining-nums;
+      }
+      .figures .l {
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.09em;
+        color: var(--sumi-500);
+      }
+      .src { font-size: 13px; color: var(--sumi-500); }
+    </style>
+  </head>
+  <body>
+    <div class="plate"></div>
+    <div class="wash"></div>
+    <div class="content">
+      <div class="wordmark">
+        <!-- The authored mark, identical to components/mark.tsx. -->
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.25"
+          stroke-linecap="square"
+          aria-hidden="true"
+          focusable="false"
+        >
+          <rect x="2.5" y="2.5" width="19" height="19" />
+          <path d="M14.5 2.5 V21.5" />
+          <path d="M5.5 9 H11.5 M5.5 13 H11.5" opacity="0.55" />
+          <path d="M16.5 15.5 H19.5 M16.5 18 H19.5" />
+        </svg>
+        <span class="name">kakeibo</span>
+        <span class="kanji">家計簿</span>
+      </div>
+
+      <div>
+        <h1>A finance agent that shows its working.</h1>
+        <p class="sub">
+          Twelve tools over a double-entry ledger, a hand-written loop, and a gate that stops
+          before anything is written.
+        </p>
+      </div>
+
+      <div class="foot">
+        <div class="figures">
+          <div><span class="n">12</span><span class="l">tools</span></div>
+          <div><span class="n">46/46</span><span class="l">golden tasks</span></div>
+          <div><span class="n">100%</span><span class="l">injection blocked</span></div>
+          <div><span class="n">$0.0105</span><span class="l">median / task</span></div>
+        </div>
+        <div class="src">measured, not claimed</div>
+      </div>
+    </div>
+  </body>
+</html>
