@@ -8,7 +8,7 @@ import {
   runTurn,
   SYSTEM_PROMPT,
 } from '@kakeibo/core'
-import { cacheStats, closeDb, createRegistry, DbTracer } from '@kakeibo/ledger'
+import { cacheStats, closeDb, createRegistry, DbTracer, DEV_OWNER_ID } from '@kakeibo/ledger'
 
 /**
  * `pnpm cache:report` — measures context caching for real (spec 5.5, 18).
@@ -48,8 +48,8 @@ interface TurnRow {
 async function main(): Promise<void> {
   const config = env()
   const adapter = createAdapter()
-  const registry = createRegistry()
-  const tracer = new DbTracer()
+  const registry = createRegistry(DEV_OWNER_ID)
+  const tracer = new DbTracer(DEV_OWNER_ID)
 
   const probe = new GeminiAdapter()
   const prefixTokens = await probe.countTokens(
@@ -143,7 +143,7 @@ async function main(): Promise<void> {
     `  cost           : ${formatUsd(totalCost)} vs ${formatUsd(totalUncached)} uncached (${pct(totalUncached - totalCost, totalUncached)} saved)`,
   )
 
-  const lifetime = await cacheStats()
+  const lifetime = await cacheStats(DEV_OWNER_ID)
   console.log(
     `  lifetime (db)  : ${lifetime.cachedTokens} / ${lifetime.inputTokens} across ${lifetime.runs} traced runs = ${lifetime.savingsPercent}%`,
   )

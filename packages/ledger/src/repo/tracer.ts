@@ -60,12 +60,12 @@ export class DbTracer implements Tracer {
           tx
             .update(traceRuns)
             .set({
-            finishedAt: new Date(),
-            status: result.status,
-            inputTokens: result.usage.inputTokens,
-            outputTokens: result.usage.outputTokens,
-            cachedTokens: result.usage.cachedTokens,
-            costUsdEst: result.costUsdEst.toFixed(6),
+              finishedAt: new Date(),
+              status: result.status,
+              inputTokens: result.usage.inputTokens,
+              outputTokens: result.usage.outputTokens,
+              cachedTokens: result.usage.cachedTokens,
+              costUsdEst: result.costUsdEst.toFixed(6),
               latencyMs: result.latencyMs,
             })
             .where(and(eq(traceRuns.ownerId, owner), eq(traceRuns.id, id))),

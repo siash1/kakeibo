@@ -1,8 +1,8 @@
 import { loadEnv } from '@kakeibo/core/env'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { closeDb } from '../db'
-import { resetOwners } from '../testing'
 import { asOwnerId } from '../owner'
+import { resetOwners } from '../testing'
 import { accountByName, ensureSeedAccounts, listAccounts } from './accounts'
 
 loadEnv()

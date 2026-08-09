@@ -12,7 +12,13 @@ import {
   SYSTEM_PROMPT,
 } from '@kakeibo/core'
 import type { EvalReport } from '@kakeibo/evals'
-import { cacheStats, closeDb, createRegistry, searchTransactions } from '@kakeibo/ledger'
+import {
+  cacheStats,
+  closeDb,
+  createRegistry,
+  DEV_OWNER_ID,
+  searchTransactions,
+} from '@kakeibo/ledger'
 
 /**
  * `pnpm metrics` — prints every number the README claims, from the artefacts
@@ -29,7 +35,7 @@ const root = process.cwd().replace(/\/(packages|apps)\/[^/]+$/, '')
 
 async function main(): Promise<void> {
   const config = env()
-  const registry = createRegistry()
+  const registry = createRegistry(DEV_OWNER_ID)
 
   console.log('kakeibo metrics\n')
 
@@ -57,7 +63,7 @@ async function main(): Promise<void> {
 
   // --- Lifetime cache stats from the trace tables --------------------------
   console.log('\n  caching (all traced runs in this database)')
-  const cache = await cacheStats()
+  const cache = await cacheStats(DEV_OWNER_ID)
   console.log(`    runs traced          : ${cache.runs}`)
   console.log(
     `    prompt tokens cached : ${cache.cachedTokens.toLocaleString()} / ${cache.inputTokens.toLocaleString()} = ${cache.savingsPercent}%`,
@@ -107,7 +113,7 @@ async function main(): Promise<void> {
 
 /** Realistic histories: short, medium and long conversations over real data. */
 async function buildHistories(): Promise<[string, CanonicalMessage[]][]> {
-  const rows = await searchTransactions({ limit: 40 })
+  const rows = await searchTransactions(DEV_OWNER_ID, { limit: 40 })
   const toolResult = JSON.stringify({ count: rows.length, transactions: rows }, null, 2)
 
   const exchange = (n: number): CanonicalMessage[] => [

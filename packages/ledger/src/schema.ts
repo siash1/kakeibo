@@ -76,7 +76,7 @@ export const accounts = pgTable(
 
 export const importBatches = pgTable('import_batches', {
   id: uuid('id').primaryKey().defaultRandom(),
-    ownerId: ownerId(),
+  ownerId: ownerId(),
   filename: text('filename').notNull(),
   rowCount: integer('row_count').notNull(),
   importedAt: timestamp('imported_at', { withTimezone: true }).notNull().defaultNow(),
@@ -122,7 +122,7 @@ export const postings = pgTable(
 
 export const rules = pgTable('rules', {
   id: uuid('id').primaryKey().defaultRandom(),
-    ownerId: ownerId(),
+  ownerId: ownerId(),
   /** Case-insensitive substring matched against the raw description. */
   pattern: text('pattern').notNull(),
   accountId: uuid('account_id')
@@ -149,7 +149,7 @@ export const budgets = pgTable(
 
 export const memories = pgTable('memories', {
   id: uuid('id').primaryKey().defaultRandom(),
-    ownerId: ownerId(),
+  ownerId: ownerId(),
   content: text('content').notNull(),
   category: text('category').notNull(),
   source: memorySourceEnum('source').notNull().default('user_stated'),

@@ -9,7 +9,14 @@ import {
   loadEnv,
   runTurn,
 } from '@kakeibo/core'
-import { closeDb, createRegistry, DbMemoryStore, DbTracer, KNOWN_CATEGORIES } from '@kakeibo/ledger'
+import {
+  closeDb,
+  createRegistry,
+  DbMemoryStore,
+  DbTracer,
+  DEV_OWNER_ID,
+  KNOWN_CATEGORIES,
+} from '@kakeibo/ledger'
 
 /**
  * The CLI (spec 14) — Phase 1's interface and still the fastest way to drive
@@ -54,9 +61,12 @@ async function main(): Promise<void> {
   const model = flags.model ?? config.AGENT_MODEL
 
   const adapter = createAdapter()
-  const registry = createRegistry()
-  const tracer = new DbTracer()
-  const memory = new DbMemoryStore()
+  // One fixed owner until Plan B introduces sessions; this is the single
+  // line each surface has to change then.
+  const owner = DEV_OWNER_ID
+  const registry = createRegistry(owner)
+  const tracer = new DbTracer(owner)
+  const memory = new DbMemoryStore(owner)
   const contextManager = new ContextManager()
 
   const rl = createInterface({

@@ -1,8 +1,8 @@
-import { and, asc, desc, eq, gte, ilike, inArray, lte, or, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, gte, ilike, inArray, lte, or, type SQL, sql } from 'drizzle-orm'
 import { UNCATEGORIZED } from '../categories'
 import { withOwner } from '../db'
-import type { OwnerId } from '../owner'
 import { sumMinor } from '../money'
+import type { OwnerId } from '../owner'
 import { accounts, postings, type Transaction, transactions } from '../schema'
 import { requireAccount } from './accounts'
 
@@ -144,7 +144,9 @@ export async function searchTransactions(
 ): Promise<TransactionWithPostings[]> {
   // Owner is the FIRST condition, so any scan is bounded by tenant before a
   // single one of the user's own filters applies.
-  const conditions = [eq(transactions.ownerId, owner)]
+  // `or(...)` is typed SQL | undefined, and `and(...)` skips undefined entries,
+  // so the array is widened rather than the pushes being non-null-asserted.
+  const conditions: (SQL | undefined)[] = [eq(transactions.ownerId, owner)]
 
   if (filters.query) {
     const pattern = `%${filters.query}%`
@@ -180,10 +182,10 @@ export async function searchTransactions(
       .select()
       .from(transactions)
       .where(and(...conditions))
-    // The id tiebreaker is load-bearing: a bulk import gives every row the same
-    // created_at, so without it Postgres may return same-date rows in any order.
-    // That makes tool output non-reproducible, which breaks replay fixtures and
-    // eval oracles alike.
+      // The id tiebreaker is load-bearing: a bulk import gives every row the same
+      // created_at, so without it Postgres may return same-date rows in any order.
+      // That makes tool output non-reproducible, which breaks replay fixtures and
+      // eval oracles alike.
       .orderBy(desc(transactions.date), desc(transactions.createdAt), asc(transactions.id))
       .limit(filters.limit ?? 20),
   )
@@ -217,12 +219,12 @@ async function hydratePostings(
   const postingRows = await withOwner(owner, (tx) =>
     tx
       .select({
-      transactionId: postings.transactionId,
-      amountMinor: postings.amountMinor,
-      currency: postings.currency,
-      account: accounts.name,
-      accountType: accounts.type,
-    })
+        transactionId: postings.transactionId,
+        amountMinor: postings.amountMinor,
+        currency: postings.currency,
+        account: accounts.name,
+        accountType: accounts.type,
+      })
       .from(postings)
       .innerJoin(accounts, and(eq(accounts.id, postings.accountId), eq(accounts.ownerId, owner)))
       .where(and(eq(postings.ownerId, owner), inArray(postings.transactionId, ids))),
@@ -278,12 +280,12 @@ export async function categorizeTransactions(
   const candidates = await withOwner(owner, (tx) =>
     tx
       .select({
-      postingId: postings.id,
-      transactionId: postings.transactionId,
-      accountId: postings.accountId,
-      accountName: accounts.name,
-      accountType: accounts.type,
-    })
+        postingId: postings.id,
+        transactionId: postings.transactionId,
+        accountId: postings.accountId,
+        accountName: accounts.name,
+        accountType: accounts.type,
+      })
       .from(postings)
       .innerJoin(accounts, and(eq(accounts.id, postings.accountId), eq(accounts.ownerId, owner)))
       .where(and(eq(postings.ownerId, owner), inArray(postings.transactionId, transactionIds))),
@@ -348,9 +350,9 @@ export async function findUnbalancedTransactions(
   const rows = await withOwner(owner, (tx) =>
     tx
       .select({
-      id: postings.transactionId,
-      delta: sql<number>`sum(${postings.amountMinor})::bigint`,
-    })
+        id: postings.transactionId,
+        delta: sql<number>`sum(${postings.amountMinor})::bigint`,
+      })
       .from(postings)
       .where(eq(postings.ownerId, owner))
       .groupBy(postings.transactionId)

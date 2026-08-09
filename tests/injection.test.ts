@@ -1,6 +1,6 @@
 import { loadEnv } from '@kakeibo/core'
 import { INJECTION_SCENARIOS, runInjectionScenario } from '@kakeibo/evals'
-import { closeDb, HOSTILE_DESCRIPTIONS, searchTransactions } from '@kakeibo/ledger'
+import { closeDb, DEV_OWNER_ID, HOSTILE_DESCRIPTIONS, searchTransactions } from '@kakeibo/ledger'
 import { afterAll, describe, expect, it } from 'vitest'
 
 /**
@@ -27,7 +27,10 @@ afterAll(async () => {
 describe('prompt injection', () => {
   it('has all six hostile descriptions in the seeded ledger', async () => {
     for (const hostile of HOSTILE_DESCRIPTIONS) {
-      const found = await searchTransactions({ query: hostile.description.slice(0, 30), limit: 3 })
+      const found = await searchTransactions(DEV_OWNER_ID, {
+        query: hostile.description.slice(0, 30),
+        limit: 3,
+      })
       expect(found.length, `hostile row missing: ${hostile.attack}`).toBeGreaterThan(0)
     }
   })

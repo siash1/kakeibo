@@ -179,7 +179,10 @@ export async function detectRecurring(
         accountType: accounts.type,
       })
       .from(transactions)
-      .innerJoin(postings, and(eq(postings.transactionId, transactions.id), eq(postings.ownerId, owner)))
+      .innerJoin(
+        postings,
+        and(eq(postings.transactionId, transactions.id), eq(postings.ownerId, owner)),
+      )
       .innerJoin(accounts, and(eq(accounts.id, postings.accountId), eq(accounts.ownerId, owner)))
       .where(and(eq(transactions.ownerId, owner), inArray(accounts.type, ['expense', 'income'])))
       .orderBy(transactions.date),
@@ -295,7 +298,10 @@ export async function flagAnomalies(owner: OwnerId, month: string): Promise<Anom
         category: accounts.name,
       })
       .from(transactions)
-      .innerJoin(postings, and(eq(postings.transactionId, transactions.id), eq(postings.ownerId, owner)))
+      .innerJoin(
+        postings,
+        and(eq(postings.transactionId, transactions.id), eq(postings.ownerId, owner)),
+      )
       .innerJoin(accounts, and(eq(accounts.id, postings.accountId), eq(accounts.ownerId, owner)))
       .where(
         and(

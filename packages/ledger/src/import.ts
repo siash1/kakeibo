@@ -2,6 +2,7 @@ import { normalizeCategory, UNCATEGORIZED } from './categories'
 import { type MappingPreset, type ParsedRow, parseStatement } from './csv'
 import { deterministicUuid, SEED_NAMESPACE } from './ids'
 import { formatMinor } from './money'
+import type { OwnerId } from './owner'
 import { accountByName, requireAccount } from './repo/accounts'
 import { type CreateTransactionInput, createTransactions } from './repo/transactions'
 import { createImportBatch, listRules, matchRule } from './repo/writes'
@@ -41,12 +42,13 @@ interface ResolvedRow extends ParsedRow {
 }
 
 export async function planImport(
+  owner: OwnerId,
   filename: string,
   text: string,
   preset: MappingPreset,
 ): Promise<{ preview: ImportPreview; resolved: ResolvedRow[] }> {
   const { rows, errors } = parseStatement(text, preset)
-  const ruleRows = await listRules()
+  const ruleRows = await listRules(owner)
 
   const resolved: ResolvedRow[] = rows.map((row) => ({
     ...row,
@@ -85,17 +87,18 @@ export async function planImport(
 }
 
 export async function commitImport(
+  owner: OwnerId,
   filename: string,
   resolved: ResolvedRow[],
   preview: ImportPreview,
   options: { deterministicIds?: boolean } = {},
 ): Promise<ImportResult> {
-  const checking = await requireAccount('Checking')
-  const batchId = await createImportBatch(filename, resolved.length)
+  const checking = await requireAccount(owner, 'Checking')
+  const batchId = await createImportBatch(owner, filename, resolved.length)
 
   const categoryIds = new Map<string, string>()
   for (const name of new Set(resolved.map((r) => r.category))) {
-    categoryIds.set(name, (await requireAccount(name)).id)
+    categoryIds.set(name, (await requireAccount(owner, name)).id)
   }
 
   const inputs: CreateTransactionInput[] = resolved.map((row) => ({
@@ -116,7 +119,7 @@ export async function commitImport(
     ],
   }))
 
-  const imported = await createTransactions(inputs)
+  const imported = await createTransactions(owner, inputs)
   return { ...preview, importBatchId: batchId, imported }
 }
 
@@ -134,8 +137,8 @@ function resolveCategory(row: ParsedRow, ruleRows: Awaited<ReturnType<typeof lis
 }
 
 /** Guards against importing the same statement twice. */
-export async function ensureAccountsExist(): Promise<void> {
-  const checking = await accountByName('Checking')
+export async function ensureAccountsExist(owner: OwnerId): Promise<void> {
+  const checking = await accountByName(owner, 'Checking')
   if (!checking) {
     throw new Error('The chart of accounts is empty. Run `pnpm db:migrate && pnpm db:seed` first.')
   }

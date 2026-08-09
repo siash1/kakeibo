@@ -14,9 +14,7 @@ describe('OwnerId', () => {
   })
 
   it('exposes a stable development owner', () => {
-    expect(DEV_OWNER_ID).toMatch(
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
-    )
+    expect(DEV_OWNER_ID).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/)
     expect(DEV_OWNER_ID).toBe(asOwnerId(DEV_OWNER_ID))
   })
 })

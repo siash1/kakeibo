@@ -38,10 +38,7 @@ export async function requireAccount(owner: OwnerId, name: string): Promise<Acco
   throw new Error(`No account named "${name}". Known accounts: ${known}`)
 }
 
-export async function accountsByIds(
-  owner: OwnerId,
-  ids: string[],
-): Promise<Map<string, Account>> {
+export async function accountsByIds(owner: OwnerId, ids: string[]): Promise<Map<string, Account>> {
   if (ids.length === 0) return new Map()
   const rows = await withOwner(owner, (tx) =>
     tx

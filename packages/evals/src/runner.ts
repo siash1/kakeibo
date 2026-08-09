@@ -13,6 +13,7 @@ import {
   closeDb,
   commitImport,
   createRegistry,
+  DEV_OWNER_ID,
   ensureSeedAccounts,
   generateSeedData,
   getDb,
@@ -86,9 +87,16 @@ export async function resetAndSeed(): Promise<void> {
   await getDb().execute(
     sql`truncate table trace_events, trace_runs, postings, transactions, import_batches, budgets, rules, memories, accounts restart identity cascade`,
   )
-  await ensureSeedAccounts()
-  const { preview, resolved } = await planImport('data/seed/transactions.csv', seedCsv, 'sample')
-  await commitImport('data/seed/transactions.csv', resolved, preview, { deterministicIds: true })
+  await ensureSeedAccounts(DEV_OWNER_ID)
+  const { preview, resolved } = await planImport(
+    DEV_OWNER_ID,
+    'data/seed/transactions.csv',
+    seedCsv,
+    'sample',
+  )
+  await commitImport(DEV_OWNER_ID, 'data/seed/transactions.csv', resolved, preview, {
+    deterministicIds: true,
+  })
 }
 
 export async function runTask(task: Task, options: { model?: string } = {}): Promise<TaskResult> {
@@ -100,7 +108,7 @@ export async function runTask(task: Task, options: { model?: string } = {}): Pro
   const startedAgent = Date.now()
 
   const adapter = createAdapter()
-  const registry = createRegistry()
+  const registry = createRegistry(DEV_OWNER_ID)
   const tracer = new InMemoryTracer()
 
   let history: CanonicalMessage[] = []
