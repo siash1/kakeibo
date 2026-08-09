@@ -98,14 +98,14 @@ export async function adminOwnerId(session: AdminSession): Promise<string | unde
 const DAYS = 30
 
 /**
- * A trailing `DAYS`-day window is `DAYS - 1` days *before* `UTC_DAY_START`,
- * not `DAYS`: today is one of the days being counted, so subtracting the
- * full `DAYS` reaches back one day too far and turns "30 days" into 31 —
- * `UTC_DAY_START` itself plus 30 days before it. The sparkline below (which
- * this page's own aria-label calls "30-day spend") already builds its range
- * with `DAYS - 1`; `WINDOW` and the `d30` traffic figures did not, and this
- * repo's final whole-branch review is what caught the mismatch against the
- * "30 days" the page's labels and copy assert everywhere else.
+ * The convention every trailing window on this page follows: a trailing
+ * *n*-day window is *n - 1* days before `UTC_DAY_START`, not *n*. Today is
+ * one of the *n* days being counted, so subtracting the full *n* reaches
+ * back one day too far — an *n + 1*-day span. `active()` below takes the
+ * offset already adjusted (its `days` parameter *is* the `- 1`), so
+ * `active(0)` is "today" (a 1-day window) and a caller wanting a true 7-day
+ * window calls `active(6)`, not `active(7)`. `WINDOW` a little further down
+ * applies the same `- 1` explicitly, since it is not built through `active()`.
  */
 
 /**
@@ -349,11 +349,10 @@ export async function trafficPanel(_session: AdminSession): Promise<TrafficPanel
     )
 
   return {
-    // DAYS - 1, not DAYS: see the comment on DAYS above. today's `active(0)`
-    // needs no such adjustment — a single day's window is already "0 days
-    // before today" — which is why it, and d7 (unflagged by the review that
-    // caught this), are left as they were.
-    visitors: { today: await active(0), d7: await active(7), d30: await active(DAYS - 1) },
+    // Each offset is n - 1 for a true trailing n-day window ending today —
+    // see the comment on DAYS above. today is n = 1 (active(0)), d7 is
+    // n = 7 (active(6)), d30 is n = DAYS (active(DAYS - 1)).
+    visitors: { today: await active(0), d7: await active(6), d30: await active(DAYS - 1) },
     anonymous,
     signedIn,
     // A percentage, not a fraction, and 0 rather than NaN when there is nobody
