@@ -263,6 +263,46 @@ correct as a default, wrong as a permanent state once the site is live. Set it
 to the owner's real sign-in email(s) as part of the deploy, or the dashboard
 Plan C just built is unreachable on the one database it exists to watch.
 
+**Email verification, before `ADMIN_EMAILS` goes on a public deploy.**
+`adminSession()` (`apps/web/src/lib/admin.ts`) now requires
+`viewer.emailVerified === true` in addition to the allowlist match, because
+`auth.ts` enables `emailAndPassword` with no `requireEmailVerification` and
+sign-up is public at `/api/auth/sign-up/email`. Without the check, `email` on
+a password account is self-asserted: whoever registers the allowlisted
+address first *becomes* the operator, and the owner's address is sitting in
+plain sight in all 18 commit headers of a public repo.
+
+No mail provider is configured anywhere in this codebase, so nothing can
+currently set `email_verified` on a normal sign-up — which means the fix, left
+as it is, locks the owner out of their own dashboard. Before `ADMIN_EMAILS` is
+set on a public deploy, Plan D must configure one of:
+
+- **Google OAuth**, so the provider vouches for the address (see the OAuth
+  item above) — the better long-term answer, since it needs no further manual
+  step per address; or
+- **A real email-verification flow** (a mail provider plus Better Auth's
+  verification email/link).
+
+Until one of those exists, the operator marks their own account verified once,
+deliberately, by hand:
+
+```sql
+update "user" set email_verified = true where email = '<the operator address>';
+```
+
+Do this once, right after the owner's own sign-up, before announcing the site.
+
+**The residual risk, stated plainly.** Requiring verification stops an
+attacker from *using* the allowlisted address — they cannot register it and
+have Better Auth call it verified, since nothing here does that automatically.
+It does **not** stop an attacker from *registering* it first and denying it to
+the owner: on a fresh production deploy, the address is claimable by whoever
+signs up with it first, verified or not, and Better Auth will not hand it to
+a second registrant. The mitigation is procedural, not technical: the owner
+registers their own account — and runs the `email_verified` statement above —
+*before* `ADMIN_EMAILS` is set and the site is announced. This is not fixed by
+anything in this codebase; it is a sequencing requirement on the deploy.
+
 ## Decisions already made — do not re-litigate
 
 From the design spec, answered by the owner:

@@ -21,6 +21,17 @@ export interface ResolvedOwner {
   owner: OwnerId
   isAnonymous: boolean
   email: string
+  /**
+   * Whether Better Auth has verified this address belongs to whoever is
+   * signed in. `false` for every anonymous visitor and — until either Google
+   * OAuth or an email-verification flow is wired up (see
+   * `docs/continue-here.md`) — for every password account too, since
+   * `emailAndPassword` is enabled without `requireEmailVerification`.
+   * `adminSession()` requires this in addition to the allowlist: without it,
+   * whoever registers the operator's address first, on a public deploy,
+   * becomes the operator.
+   */
+  emailVerified: boolean
   /** Present only when this request created the session. Forward it verbatim. */
   setCookie?: string
 }
@@ -32,6 +43,7 @@ export async function resolveOwner(request: Request): Promise<ResolvedOwner> {
       owner: asOwnerId(existing.user.id),
       isAnonymous: existing.user.isAnonymous === true,
       email: existing.user.email,
+      emailVerified: existing.user.emailVerified === true,
     }
   }
 
@@ -48,6 +60,8 @@ export async function resolveOwner(request: Request): Promise<ResolvedOwner> {
     owner: asOwnerId(body.user.id),
     isAnonymous: true,
     email: body.user.email ?? '',
+    // An anonymous visitor has no address to verify at all.
+    emailVerified: false,
     ...(response.headers.get('set-cookie')
       ? { setCookie: response.headers.get('set-cookie') as string }
       : {}),
@@ -69,6 +83,7 @@ export async function viewerOwner(): Promise<ResolvedOwner | undefined> {
     owner: asOwnerId(session.user.id),
     isAnonymous: session.user.isAnonymous === true,
     email: session.user.email,
+    emailVerified: session.user.emailVerified === true,
   }
 }
 

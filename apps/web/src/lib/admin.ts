@@ -14,5 +14,13 @@ export async function adminSession(): Promise<AdminSession | undefined> {
   // this is not merely belt and braces: it stops an allowlist entry from ever
   // being satisfiable by a generated address.
   if (!viewer || viewer.isAnonymous) return undefined
+  // `email` on a password account is self-asserted: `emailAndPassword` is
+  // enabled with no `requireEmailVerification` (see auth.ts), and sign-up is
+  // public at /api/auth/sign-up/email. Without this check, an allowlist entry
+  // is satisfiable by anyone who registers that address first — not by
+  // proving they control it. See docs/continue-here.md for what has to be
+  // true (Google OAuth or a real verification flow) before ADMIN_EMAILS is
+  // set on a public deploy, and the residual risk even after this check.
+  if (!viewer.emailVerified) return undefined
   return assertAdmin(viewer.email)
 }

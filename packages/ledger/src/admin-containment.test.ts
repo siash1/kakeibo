@@ -58,7 +58,14 @@ function sourceFiles(dir: string, base: string, found: string[] = []): string[] 
     if (SKIP_DIRS.has(entry)) continue
     const full = join(dir, entry)
     if (statSync(full).isDirectory()) sourceFiles(full, base, found)
-    else if (entry.endsWith('.ts') && !entry.endsWith('.test.ts')) {
+    // .tsx as well as .ts: apps/web's server components (app/admin/page.tsx,
+    // app/runs/[id]/page.tsx) do database work and are named .tsx, not .ts.
+    // A filter that only matched .ts made every .tsx file under apps/web/src
+    // exempt from this assertion — including the one page that legitimately
+    // calls adminDb-backed functions — while adminDb itself is re-exported
+    // from the package barrel, so a future page reaching for it directly
+    // would have gone unnoticed.
+    else if (/\.tsx?$/.test(entry) && !/\.test\.tsx?$/.test(entry)) {
       found.push(full.slice(base.length + 1))
     }
   }
