@@ -17,6 +17,9 @@ data/private/
 
 # Isolated worktrees for in-progress plan execution
 .worktrees/
+# Harness-created worktrees. `.claude/` is tracked, so without this an entire
+# second checkout shows up as untracked inside a versioned directory.
+.claude/worktrees/
 
 # Eval output is regenerated; latest.{md,json} are committed deliberately
 evals/report/runs/
