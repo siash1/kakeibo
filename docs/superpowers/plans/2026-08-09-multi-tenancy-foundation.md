@@ -318,6 +318,15 @@ describe('withOwner', () => {
     expect(leaked).toBe(DEV_OWNER_ID)
   })
 
+  it('gives adminDb a separate pool from the scoped connection', async () => {
+    // Not an alias for getDb(). Task 9 repoints getDb() at the restricted role;
+    // if adminDb() followed it, seeding and evals would lose the ability to
+    // write rows for any owner.
+    const { adminDb } = await import('./db')
+    const result = await adminDb().execute(sql`select current_setting('app.owner_id', true) as owner`)
+    expect((result.rows as { owner: string | null }[])[0]?.owner ?? null).toBeNull()
+  })
+
   it('rolls back on error so a failed turn writes nothing', async () => {
     await expect(
       withOwner(DEV_OWNER_ID, async (tx) => {
@@ -366,12 +375,38 @@ export async function withOwner<T>(owner: OwnerId, fn: (tx: Tx) => Promise<T>): 
 }
 
 /**
- * The unscoped connection. Used by migrations, `pnpm db:seed`, the eval
- * harness, and — in Plan C — the admin module, which is the only part of the
- * application allowed to touch it.
+ * The unscoped connection: migrations, `pnpm db:seed`, the eval harness, and —
+ * in Plan C — the admin module, which is the only part of the application
+ * allowed to touch it.
+ *
+ * Its OWN pool on DATABASE_URL, deliberately not `getDb()`. Task 9 repoints
+ * getDb() at the restricted `app_user` role, and if adminDb() were an alias for
+ * it, seeding and evals would silently become subject to RLS — unable to write
+ * rows for any owner but the one currently set, which is the single thing they
+ * exist to do.
  */
+let adminPool: pg.Pool | undefined
+let adminDbInstance: Db | undefined
+
 export function adminDb(): Db {
-  return getDb()
+  if (!adminDbInstance) {
+    adminPool = new pg.Pool({ connectionString: env().DATABASE_URL, max: 4 })
+    adminDbInstance = drizzle(adminPool, { schema })
+  }
+  return adminDbInstance
+}
+```
+
+`closeDb()` must end both pools:
+
+```ts
+export async function closeDb(): Promise<void> {
+  await pool?.end()
+  await adminPool?.end()
+  pool = undefined
+  db = undefined
+  adminPool = undefined
+  adminDbInstance = undefined
 }
 ```
 
@@ -1278,10 +1313,9 @@ Add `APP_DATABASE_URL: z.string().default('')` to the env schema in
 `packages/core/src/env.ts`, then make `getDb()` prefer it:
 
 ```ts
-// packages/ledger/src/db.ts
-// The app connects as the restricted role when one is configured. adminDb()
-// keeps using DATABASE_URL, which is how migrations, seeding and evals stay
-// able to write rows for any owner.
+// packages/ledger/src/db.ts — inside getDb() only. adminDb() is untouched and
+// keeps its own pool on DATABASE_URL, which is how migrations, seeding and
+// evals stay able to write rows for any owner.
 const connectionString = env().APP_DATABASE_URL || env().DATABASE_URL
 ```
 
@@ -1529,7 +1563,12 @@ Deliberately **not** covered by this plan, and each has a home: §2 identity, §
 
 **Type consistency.** `OwnerId` is the parameter type in every signature. `withOwner(owner, fn)` argument order is identical in Tasks 3–7. `Tx` is defined once in Task 3 and referenced by name thereafter. `DEV_OWNER_ID` is defined in Task 1 and used in Tasks 2, 8 and 11. `ensureSeedAccounts(owner)` is used with that arity in Tasks 4, 5, 6, 7 and 10.
 
-**Two defects this review caught and fixed.** Task 9 originally had the engineer
+**Three defects reviews caught and fixed.** Pre-execution review found that
+`adminDb()` was defined as an alias for `getDb()`, which Task 9 then repoints at
+the restricted role — silently subjecting seeding and evals to RLS. It now owns
+a separate pool on `DATABASE_URL`, with a test asserting the separation.
+
+**Two defects the plan's own self-review caught and fixed.** Task 9 originally had the engineer
 edit a migration *after* applying it, which never re-runs — the role setup now
 happens before `pnpm db:migrate` and any later discovery means a new numbered
 file. It also put the `app_user` password in a committed migration, violating
