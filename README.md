@@ -46,6 +46,13 @@ Cost figures are list-price estimates from `packages/core/src/pricing.ts`, read
 from Google's published Vertex pricing. They are useful as *relative* numbers —
 cached versus uncached, Flash versus Pro — which is what they are used for.
 
+The Tests row cites `pnpm test`, which is vitest's own runtime count.
+`pnpm metrics` prints a lower number for the same 29 files (216, not 228): it
+is a static `grep` for `it(`/`test(` declarations, and `isolation.test.ts`
+builds several tests from a table at runtime that the grep only sees once.
+Both figures are real; they are answers to different questions, not a
+disagreement.
+
 ---
 
 ## Quick start

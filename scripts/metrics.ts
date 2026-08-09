@@ -103,7 +103,16 @@ async function main(): Promise<void> {
   )
   console.log(`    eval tasks           : ${count('grep -h "^- id:" evals/tasks/*.yaml | wc -l')}`)
   console.log(
-    `    tests                : ${count('grep -rhoE "^\\s*(it|test)\\(" packages apps tests --include=*.test.ts | wc -l')} across ${count('ls packages/*/src/**/*.test.ts packages/*/src/*.test.ts tests/*.test.ts 2>/dev/null | sort -u | wc -l')} files`,
+    `    tests                : ${count('grep -rhoE "^\\s*(it|test)\\(" packages apps tests --include=*.test.ts | wc -l')} across ${count('ls packages/*/src/**/*.test.ts packages/*/src/*.test.ts apps/*/src/**/*.test.ts tests/*.test.ts 2>/dev/null | sort -u | wc -l')} files`,
+  )
+  // This is a static grep for `it(`/`test(` declarations, not vitest's runtime
+  // count — `pnpm test` prints a higher number wherever a test is generated in
+  // a loop (packages/ledger/src/isolation.test.ts builds several from a
+  // table). The README's own Tests row cites `pnpm test` for exactly that
+  // reason; this figure and that one are expected to disagree, and neither is
+  // wrong.
+  console.log(
+    '                           (static count of test declarations; run `pnpm test` for the number vitest actually executes, which counts tests generated in a loop separately)',
   )
   console.log(`    fixtures             : ${count('ls fixtures/*.json 2>/dev/null | wc -l')}`)
 
