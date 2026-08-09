@@ -15,12 +15,16 @@ import { Card, EmptyState } from '@/components/ui'
 export function WorldMap({ points }: { points: MapPoint[] }) {
   if (points.length === 0) {
     // Local development resolves no addresses at all, so this is the normal
-    // state before deployment rather than an error.
+    // state before deployment rather than an error. Card-wrapped like every
+    // other panel, so a map with no points still has a border rather than
+    // floating loose on the page.
     return (
-      <EmptyState
-        title="No located visits yet."
-        hint="Locations come from the edge; there are none locally."
-      />
+      <Card className="p-4">
+        <EmptyState
+          title="No located visits yet."
+          hint="Locations come from the edge; there are none locally."
+        />
+      </Card>
     )
   }
 

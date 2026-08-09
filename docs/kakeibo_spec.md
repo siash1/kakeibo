@@ -216,6 +216,30 @@ rate_limits            key text pk,            -- sha256(ip + salt + date)
                        -- visitor clearing cookies, which is a change of owner
 ```
 
+*Amended 2026-08-09 (Plan C).* `trace_runs` gained five nullable geolocation
+columns — `geo_country char(2)`, `geo_region text`, `geo_city text`, `geo_lat
+double precision`, `geo_lon double precision` — populated per run from Vercel's
+edge IP headers rather than per user, so the operator's visitor map (§9.5 of the
+design doc) shows activity and ages out with trace data instead of accumulating
+a permanent location history. All five are null in local development and for
+any request the edge could not resolve; the map is required to render without
+complaint when they are.
+
+One more table arrived with it:
+
+```
+operator_flags   key text pk, value boolean default false, updated_at
+                 -- site-wide switches (live_chat_paused today). Not
+                 -- owner-scoped and has no RLS policy: a kill switch is a
+                 -- property of the site, not of a visitor.
+```
+
+Plan C also corrected a test the design doc asked for and could not have:
+`docs/superpowers/specs/2026-08-09-public-launch-design.md` §11 wants "the
+RLS-bypassing role is referenced in `repo/admin.ts` and nowhere else," which was
+never satisfiable — see that document's new §9.7 for why, and for what
+`packages/ledger/src/admin-containment.test.ts` asserts instead.
+
 Seeded categories (expense accounts): Groceries, Dining, Transport, Rent, Utilities, Subscriptions, Shopping, Health, Entertainment, Travel, Fees, **Uncategorized**. Income accounts: Salary, Interest, Other Income. Asset: Checking. Liability: Credit Card. Categorization = repointing a transaction's expense/income posting from Uncategorized to the target account (a balanced update, not a delete/insert of money).
 
 ## 8. `packages/core` — the agent engine
@@ -437,6 +461,8 @@ DATABASE_URL=postgres://kakeibo:kakeibo@localhost:5433/kakeibo
 APP_DATABASE_URL=
 CONTEXT_BUDGET_TOKENS=60000
 ALLOW_WRITES=0                    # mcp server write gate
+ALLOW_DESTRUCTIVE_RESET=0         # (Plan C) db:reset and eval refuse a non-localhost
+                                   # DATABASE_URL host without this
 PORT=3000
 
 # Auth (Plan B). Generate the secret with `openssl rand -base64 32`.
@@ -457,6 +483,11 @@ USER_DAILY_MESSAGE_QUOTA=25
 IP_DAILY_MESSAGE_QUOTA=20
 GLOBAL_DAILY_BUDGET_USD=0.667
 RATE_LIMIT_SALT=                  # salts the per-IP key; raw addresses are never stored
+
+# Admin (Plan C). Comma-separated emails allowed to reach /admin. Empty means
+# nobody — an empty allowlist that granted access would make a missing
+# environment variable an open dashboard.
+ADMIN_EMAILS=
 ```
 
 pnpm scripts: `dev` (web), `cli`, `db:up`, `db:migrate`, `db:seed`, `db:reset`,

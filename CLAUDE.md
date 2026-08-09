@@ -71,6 +71,30 @@ These are decided and not up for re-litigation (see `docs/kakeibo_spec.md`):
    replaying a tool turn without it is a hard 400. A layer that normalises the
    message shape breaks only on tool turns and only in production.
 
+10. **Cross-owner reads live in `packages/ledger/src/repo/admin.ts`, and take
+    an `AdminSession`.** That module is the only place in the application
+    permitted to bypass row-level security; every function in it takes an
+    `AdminSession` — producible only by `assertAdmin`, checked against
+    `ADMIN_EMAILS` — as its first parameter, rather than re-checking
+    authorization itself. `packages/ledger/src/admin-containment.test.ts`
+    asserts the set of modules holding the RLS-bypassing connection equals a
+    reviewed allowlist with a reason per entry. Adding a module to that
+    allowlist is a deliberate act, not a fix for a failing test: the first
+    question is always whether the query could have been owner-scoped instead,
+    and only once that has a real answer does the new entry get a reason
+    written next to it.
+
+11. **Dates in hand-written SQL must be UTC-anchored.** `current_date` and
+    `<date> - interval` both evaluate in the database session's timezone —
+    `Asia/Kolkata` on the development machine, UTC on the intended production
+    host — so a bound built from either silently picks a different day
+    depending on which database it runs against. `admin.ts` and
+    `packages/ledger/src/repo/quota.ts` each define a `UTC_DAY_START` constant
+    that pins midnight UTC as a `timestamptz` instant instead of a bare date;
+    the second is a deliberate duplicate of the first, not an import, because
+    importing from `admin.ts` — the RLS-bypass door — would give the
+    containment test another module to name for a one-line expression.
+
 ## Layout
 
 ```

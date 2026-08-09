@@ -10,10 +10,15 @@ import { isLiveChatPaused } from './flags'
 /**
  * Cost control (spec §5).
  *
- * Four layers, cheapest first, all computed from tables that already exist:
- * `trace_runs` records owner and cost per turn, and `user` carries the blocked
- * flag. There are no rollup tables — at ~148 turns a day a direct scan stays
- * fast for years, and a rollup is a cache to invalidate for no present gain.
+ * Five checks, cheapest first, all computed from tables that already exist:
+ * `trace_runs` records owner and cost per turn, `user` carries the blocked
+ * flag, and `operator_flags` is a single-row lookup. The first two — the
+ * live-chat pause and the per-owner block — are the operator's kill switches
+ * from §9.4, not the four cost layers §5 originally numbered; they sit ahead
+ * of the three quota layers because a paused or blocked check costs nothing to
+ * ask and answers before any of the others need to run. There are no rollup
+ * tables — at ~148 turns a day a direct scan stays fast for years, and a
+ * rollup is a cache to invalidate for no present gain.
  *
  * Everything here runs on `adminDb`. The global cap is a sum across every
  * owner, which is exactly what the row-level security policies forbid, and the

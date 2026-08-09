@@ -47,7 +47,8 @@ export default async function AdminPage() {
         <div>
           <h1 className="text-lg text-ink-100">Operator</h1>
           <p className="mt-1 text-xs text-ink-500">
-            Every owner, unscoped. Trace payloads include ledger contents — see the privacy page.
+            Every owner, unscoped. Trace payloads include tool arguments and results, so a trace
+            here is that visitor's ledger contents.
           </p>
         </div>
         <span className="font-mono text-[11px] text-ink-500">{session.email}</span>

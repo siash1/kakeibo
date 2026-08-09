@@ -38,7 +38,7 @@ command. Nothing here is an estimate.
 | Median / p95 turn latency | **15.2 s** / **23.5 s** | `pnpm eval` |
 | Median cost per eval task | **$0.0105** (list price) | `pnpm eval` |
 | Context estimate error vs `countTokens` | **3.2% mean absolute** | `pnpm metrics` |
-| Tests | **183** across 25 files, plus the isolation suite a second time with RLS bypassed; no API key and no network | `pnpm test` |
+| Tests | **228** across 29 files, plus the isolation suite a second time with RLS bypassed (12 more); no API key and no network | `pnpm test` |
 | Tools | 12 | `pnpm cli` then `/help` |
 | Core loop | **496 lines** of code (`packages/core/src/loop.ts`, 639 with comments) | `pnpm metrics` |
 
@@ -429,6 +429,56 @@ silently covers the mistake. Only the second fails.
 
 ---
 
+## One door through the isolation
+
+The operator dashboard at `/admin` needs to see every visitor at once — spend,
+traffic, who is using the site and what they are costing — which is exactly
+what row-level security exists to prevent. Rather than let that need punch RLS
+full of holes, every cross-owner read in the application lives in one file,
+`packages/ledger/src/repo/admin.ts`, and a test asserts nothing else acquired
+the same reach.
+
+**Every exported function in that file takes an `AdminSession` as its first
+parameter**, and the only way to produce one is `assertAdmin`, which checks a
+session's email against the `ADMIN_EMAILS` allowlist (trimmed,
+case-insensitive — an allowlist that fails on a stray trailing space is an
+allowlist that gets disabled during an incident). The functions do not
+re-check authorization themselves; one door is easier to audit than eleven
+scattered checks. Unauthorized requests to `/admin` get a **404, not a 403** —
+a 403 confirms the route exists, which is free reconnaissance on a public site.
+
+`AdminSession` is a branded type — `{ readonly email: string; readonly
+[verified]: true }` with a private `unique symbol` nothing outside
+`assertAdmin` can name — so a plain `{ email }` object fails to satisfy it at
+the call site, the way it would not if the type were a bare `{ email: string
+}`. Be precise about what that buys: a deliberate `{ email } as AdminSession`
+still compiles. A single `as` cast between two structurally related types
+always does, and importing the private symbol changes nothing about that. The
+brand stops an accident — the wrong plain object passed where a session was
+expected — not someone willing to write the cast, and that is the right bar:
+anyone in this codebase able to write `as AdminSession` can already call
+`adminDb()` directly, so there is nothing further here for the brand to
+defend against.
+
+**`packages/ledger/src/admin-containment.test.ts` is what actually holds the
+line.** It does not (and could not) assert that `adminDb()` — the
+RLS-bypassing connection — appears only in `admin.ts`: repointing an owner on
+sign-in spans two named owners at once, the global budget sums every owner,
+and the per-owner block reads a `user` table the application role has no
+privileges on at all, none of which is "an operator reading someone else's
+ledger." So the test asserts the property that is actually true: the **set**
+of modules holding `adminDb()` equals a reviewed allowlist, with a stated
+reason against every entry, checked on both sides of the package boundary —
+once inside `packages/ledger`, once for the rest of the workspace, where
+exactly one other module legitimately holds it (`apps/web/src/lib/auth.ts`;
+Better Auth has to resolve a user from a session token before any owner is
+known, which is the query RLS exists to refuse). Adding a module to either
+list is then a visible line in a diff instead of a silent widening of the
+bypass — and the question that entry has to answer, before it gets a reason
+written next to it, is whether the query could have been owner-scoped instead.
+
+---
+
 ## Not spending more than the budget
 
 The site runs on one personal card, so the ceiling is a real constraint rather
@@ -441,7 +491,7 @@ no rollup tables to invalidate:
 | Per-owner daily messages | 8 anonymous / 25 signed-in | Signing in is the upgrade path, so it has to change the answer |
 | Per-address daily messages | 20 | Deliberately *higher* than the anonymous quota: offices and mobile carriers put many genuine visitors behind one address, and a cap of 8 would let the first lock out the rest |
 | Global daily budget | $0.667 | $20/month at a measured $0.0045 per cached web turn (`pnpm cache:report`) ≈ 148 turns/day |
-| Turnstile on "start chatting" | — | Plan C |
+| Turnstile on "start chatting" | — | Plan D |
 
 The address key is `sha256(ip + salt + date)`, so no raw address is stored and
 yesterday's keys cannot be correlated with today's — it can count a visitor
