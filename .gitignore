@@ -15,6 +15,9 @@ data/private/
 .pgdata/
 .pgdata.log
 
+# Isolated worktrees for in-progress plan execution
+.worktrees/
+
 # Eval output is regenerated; latest.{md,json} are committed deliberately
 evals/report/runs/
 
