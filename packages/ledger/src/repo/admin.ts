@@ -1,9 +1,10 @@
+import { randomUUID } from 'node:crypto'
 import { env } from '@kakeibo/core/env'
 import { and, count, countDistinct, desc, eq, gte, isNotNull, sql } from 'drizzle-orm'
 import { user } from '../auth-schema'
 import { adminDb } from '../db'
 import { traceEvents, traceRuns } from '../schema'
-import { isLiveChatPaused } from './flags'
+import { isLiveChatPaused, setFlag } from './flags'
 
 /**
  * The operator dashboard (spec §9).
@@ -649,4 +650,77 @@ export async function mapPanel(_session: AdminSession): Promise<MapPoint[]> {
     lon: Number(row.lon),
     runs: Number(row.runs),
   }))
+}
+
+/**
+ * An operator intervention, recorded where every other event is recorded.
+ *
+ * It needs a run to hang off, so it makes one: a zero-cost `trace_runs` row on
+ * the mcp channel owned by the target, which puts the intervention in that
+ * visitor's own timeline where anyone investigating them will see it.
+ *
+ * `type` is 'error' because the enum has no better member, and adding one
+ * would be a migration for a label. Queries match on payload kind — in
+ * particular `kind: 'operator_action'` here is distinct from `'blocked'`
+ * (safetyPanel's blocked-run query) and `'iteration_limit'` (healthPanel's
+ * count above), so an audit row never gets picked up by either.
+ */
+async function audit(
+  session: AdminSession,
+  target: string,
+  action: string,
+  detail: Record<string, unknown>,
+): Promise<void> {
+  const db = unscoped()
+  const runId = randomUUID()
+  await db.insert(traceRuns).values({
+    id: runId,
+    ownerId: target,
+    provider: 'operator',
+    model: 'none',
+    channel: 'mcp',
+    status: 'ok',
+  })
+  await db.insert(traceEvents).values({
+    ownerId: target,
+    runId,
+    seq: 0,
+    type: 'error',
+    payload: { kind: 'operator_action', action, target, by: session.email, ...detail },
+  })
+}
+
+/**
+ * The manual kill switch (spec §9.4).
+ *
+ * Independent of the budget trip on purpose: the reason to reach for this is
+ * usually not cost, and waiting for a cap to catch up is not an incident
+ * response. Visitors get the same graceful fallback as a quota trip.
+ */
+export async function blockOwner(
+  session: AdminSession,
+  ownerId: string,
+  blocked: boolean,
+): Promise<void> {
+  await unscoped()
+    .update(user)
+    .set({ blockedAt: blocked ? new Date() : null })
+    .where(eq(user.id, ownerId))
+  await audit(session, ownerId, 'block_owner', { blocked })
+}
+
+/**
+ * The site-wide live-chat kill switch (spec §9.4).
+ *
+ * A site-wide action has no natural owner, and `trace_runs.owner_id`
+ * references `"user"(id)` — so the audit entry is attributed to the
+ * operator's own row via `adminOwnerId`.
+ */
+export async function pauseLiveChat(session: AdminSession, paused: boolean): Promise<void> {
+  await setFlag('live_chat_paused', paused)
+  const owner = await adminOwnerId(session)
+  // If the operator has no account row yet, the switch still flips and only
+  // the audit entry is skipped. Losing an audit line is better than refusing
+  // to pause during an incident.
+  if (owner) await audit(session, owner, 'pause_live_chat', { paused })
 }

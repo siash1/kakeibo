@@ -9,16 +9,19 @@ import { resetOwners } from '../testing'
 import {
   type AdminSession,
   assertAdmin,
+  blockOwner,
   budgetPanel,
   type HealthPanel,
   healthPanel,
   mapPanel,
+  pauseLiveChat,
   recentRuns,
   safetyPanel,
   toolsPanel,
   trafficPanel,
   usersPanel,
 } from './admin'
+import { consumeQuota } from './quota'
 
 function allowlist(value: string): void {
   process.env.ADMIN_EMAILS = value
@@ -634,7 +637,6 @@ describe('mapPanel', () => {
 
   afterAll(async () => {
     await resetOwners(mapped)
-    await closeDb()
   })
 
   it('groups located runs into points and drops unlocated ones', async () => {
@@ -671,5 +673,51 @@ describe('mapPanel', () => {
     const bengaluru = points.find((point) => point.city === 'Bengaluru')
     expect(bengaluru?.runs).toBe(2)
     expect(points.every((point) => point.lat !== 0 || point.lon !== 0)).toBe(true)
+  })
+})
+
+describe('operator actions', () => {
+  afterEach(async () => {
+    await pauseLiveChat(session(), false)
+    await blockOwner(session(), bob, false)
+  })
+
+  afterAll(async () => {
+    await closeDb()
+  })
+
+  it('pausing live chat degrades every visitor to the fallback', async () => {
+    await pauseLiveChat(session(), true)
+    expect(await consumeQuota({ owner: bob, isAnonymous: true, kind: 'message' })).toMatchObject({
+      allowed: false,
+      reason: 'paused',
+    })
+  })
+
+  it('blocking an owner stops that owner and nobody else', async () => {
+    await blockOwner(session(), bob, true)
+    expect(await consumeQuota({ owner: bob, isAnonymous: true, kind: 'message' })).toMatchObject({
+      allowed: false,
+      reason: 'blocked',
+    })
+    expect((await consumeQuota({ owner: alice, isAnonymous: true, kind: 'message' })).allowed).toBe(
+      true,
+    )
+  })
+
+  it('records each intervention in the same timeline as everything else', async () => {
+    await blockOwner(session(), bob, true)
+    const events = await adminDb()
+      .select({ payload: traceEvents.payload })
+      .from(traceEvents)
+      .where(sql`${traceEvents.payload}->>'kind' = 'operator_action'`)
+
+    const blocked = events
+      .map((event) => event.payload as { action?: string; target?: string; by?: string })
+      .find((payload) => payload.action === 'block_owner' && payload.target === bob)
+
+    // Who did it, to whom, and what changed. An audit entry that does not say
+    // who is a note to nobody.
+    expect(blocked?.by).toBe('operator@example.com')
   })
 })
