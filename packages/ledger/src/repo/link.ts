@@ -3,10 +3,13 @@ import { adminDb, type Tx } from '../db'
 import {
   accounts,
   budgets,
+  conversationMessages,
+  conversations,
   importBatches,
   memories,
   postings,
   rules,
+  suspendedTurns,
   traceEvents,
   traceRuns,
   transactions,
@@ -27,6 +30,9 @@ import {
 const OWNED = [
   traceEvents,
   traceRuns,
+  suspendedTurns,
+  conversationMessages,
+  conversations,
   postings,
   transactions,
   budgets,
@@ -93,6 +99,22 @@ export async function repointOwner(from: string, to: string): Promise<RepointRes
     }
 
     return { outcome, rows }
+  })
+}
+
+/**
+ * Deletes every row an owner has, leaving the owner themselves in place.
+ *
+ * The "delete my ledger but keep my account" action, and the test helpers'
+ * teardown. It shares `OWNED` with `repointOwner` on purpose: two hand-written
+ * lists of owner-scoped tables would drift, and the one that drifts is the one
+ * that leaves rows behind.
+ */
+export async function deleteOwnerRows(owner: string): Promise<Record<string, number>> {
+  return adminDb().transaction(async (tx) => {
+    const rows: Record<string, number> = {}
+    for (const table of OWNED) rows[getTableName(table)] = await dropRows(tx, table, owner)
+    return rows
   })
 }
 

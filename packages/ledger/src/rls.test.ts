@@ -41,7 +41,8 @@ describe('row-level security backstop', () => {
         select tablename from pg_tables
         where schemaname = 'public'
           and tablename in ('accounts','transactions','postings','rules','budgets',
-                            'memories','import_batches','trace_runs','trace_events')
+                            'memories','import_batches','trace_runs','trace_events',
+                            'conversations','conversation_messages','suspended_turns')
           and rowsecurity = false
       `),
     )

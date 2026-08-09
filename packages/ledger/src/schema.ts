@@ -203,6 +203,94 @@ export const traceEvents = pgTable(
   (table) => [index('trace_events_owner_run_idx').on(table.ownerId, table.runId, table.seq)],
 )
 
+/**
+ * A chat thread (spec §3.3).
+ *
+ * History used to live in a module-level Map keyed by a made-up session id.
+ * That works for exactly one process and one visitor; on serverless the next
+ * request is a different invocation with a different heap.
+ */
+export const conversations = pgTable(
+  'conversations',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ownerId: ownerId(),
+    title: text('title'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index('conversations_owner_updated_idx').on(table.ownerId, table.updatedAt)],
+)
+
+/**
+ * One `CanonicalMessage` per row, stored **verbatim**.
+ *
+ * Nothing here maps, renames or filters fields. Gemini 3.x attaches an opaque
+ * `thoughtSignature` to functionCall parts and replaying a tool turn without it
+ * is a hard 400 — so a persistence layer that tidies the message shape breaks
+ * only on tool turns, only after a suspension, and only in production.
+ */
+export const conversationMessages = pgTable(
+  'conversation_messages',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ownerId: ownerId(),
+    conversationId: uuid('conversation_id')
+      .notNull()
+      .references(() => conversations.id, { onDelete: 'cascade' }),
+    seq: integer('seq').notNull(),
+    message: jsonb('message').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('conversation_messages_owner_conversation_idx').on(
+      table.ownerId,
+      table.conversationId,
+      table.seq,
+    ),
+    // Two writers appending at once collide here rather than silently
+    // interleaving into a history the provider will reject.
+    unique('conversation_messages_conversation_seq_key').on(table.conversationId, table.seq),
+  ],
+)
+
+/**
+ * A turn paused at a write, waiting for a human (spec §6).
+ *
+ * `usage` and `cost_usd_est` are stored deliberately. The model calls made
+ * before the pause are real spend, and a resumed turn starting its totals at
+ * zero would leave them out of `trace_runs` — which is exactly the spend the
+ * global budget cap most needs to see, since turns involving a confirmation
+ * are the expensive ones.
+ */
+export const suspendedTurns = pgTable(
+  'suspended_turns',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ownerId: ownerId(),
+    conversationId: uuid('conversation_id')
+      .notNull()
+      .references(() => conversations.id, { onDelete: 'cascade' }),
+    /** The trace run this turn belongs to, so resume continues one trace. */
+    runId: uuid('run_id').notNull(),
+    /** Messages up to and including the assistant turn that requested the tools. */
+    history: jsonb('history').notNull(),
+    /** Read-tier results already executed, so resume does not run them again. */
+    completedResults: jsonb('completed_results').notNull(),
+    /** PendingConfirmation[] — the writes a human has not yet ruled on. */
+    pending: jsonb('pending').notNull(),
+    usage: jsonb('usage').notNull(),
+    costUsdEst: numeric('cost_usd_est', { precision: 10, scale: 6 }).notNull().default('0'),
+    iterations: integer('iterations').notNull().default(0),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    /** An abandoned confirmation must not be answerable a week later. */
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  },
+  (table) => [
+    index('suspended_turns_owner_conversation_idx').on(table.ownerId, table.conversationId),
+  ],
+)
+
 export type Account = typeof accounts.$inferSelect
 export type Transaction = typeof transactions.$inferSelect
 export type Posting = typeof postings.$inferSelect
@@ -212,3 +300,6 @@ export type MemoryRow = typeof memories.$inferSelect
 export type ImportBatch = typeof importBatches.$inferSelect
 export type TraceRun = typeof traceRuns.$inferSelect
 export type TraceEvent = typeof traceEvents.$inferSelect
+export type Conversation = typeof conversations.$inferSelect
+export type ConversationMessage = typeof conversationMessages.$inferSelect
+export type SuspendedTurnRow = typeof suspendedTurns.$inferSelect

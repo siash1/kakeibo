@@ -35,7 +35,20 @@ export {
   listAccounts,
   requireAccount,
 } from './repo/accounts'
-export { OWNER_SCOPED_TABLES, type RepointResult, repointOwner } from './repo/link'
+export {
+  appendMessages,
+  createConversation,
+  latestConversation,
+  loadHistory,
+  saveSuspendedTurn,
+  takeSuspendedTurn,
+} from './repo/conversations'
+export {
+  deleteOwnerRows,
+  OWNER_SCOPED_TABLES,
+  type RepointResult,
+  repointOwner,
+} from './repo/link'
 export {
   type Anomaly,
   budgetStatus,
