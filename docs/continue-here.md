@@ -9,8 +9,8 @@ or just say: **"Read docs/continue-here.md and start."**
 
 kakeibo is a from-scratch Gemini agent over a double-entry ledger, live at
 `github.com/siash1/kakeibo`. It is being taken public in four plans plus a UI
-phase. **Three plans are merged. Phase 2 is built on a branch and not merged.
-Plan D has not been written.**
+phase. **Plans A, B and C and the whole of Phase 2 are merged to `main`. Plan D
+is written and not started — start there.**
 
 **Read first, in this order:**
 
@@ -22,13 +22,19 @@ Plan D has not been written.**
    provably cannot exist.
 3. `README.md` for the architecture, `docs/kakeibo_spec.md` for the build spec
    (its "no accounts" non-goal is superseded; §7, §8.6 and §16 carry the Plan
-   A and B amendments, and §7/§16 carry Plan C's).
+   A and B amendments, §7/§16 carry Plan C's, and §13 carries Phase 2's — the
+   routes, the two genres, and the fact that the confirm round trip has not
+   "resolved the loop's pending promise" since Plan B).
 4. `apps/web/PRODUCT.md` — product truth for the UI work, and
    `apps/web/DESIGN.md` — the visual system, written from the built world at
    the end of Phase 2. PRODUCT.md is the thing to argue with, not around;
    DESIGN.md describes what shipped, so if it and the code disagree, the code
    is the bug or the doc is stale and one of them gets fixed.
-5. `docs/superpowers/plans/2026-08-09-auth-and-serverless-readiness.md` (Plan B)
+5. `docs/superpowers/plans/2026-08-10-public-launch-surfaces-and-deploy.md` —
+   **Plan D, the work that is next.** Read its "Out of scope" block before its
+   tasks; the owner cut sign-up and `/settings` after the design spec was
+   written, and Task 1 exists to reconcile the two.
+6. `docs/superpowers/plans/2026-08-09-auth-and-serverless-readiness.md` (Plan B)
    and `docs/superpowers/plans/2026-08-09-operator-dashboard.md` (Plan C), each
    with its **"What actually happened"** section. Nearly every task in Plan C
    found a defect in its own brief; the record says what and why.
@@ -50,128 +56,113 @@ Plan D has not been written.**
   held to a reviewed allowlist by `admin-containment.test.ts`), eight read
   panels and two audited operator actions at `/admin`.
 
-### In flight: Phase 2, branch `ui-overhaul`
+### Phase 2 — done and merged (PRs #3 and #4)
 
-Worktree at `.worktrees/ui-overhaul`, **not pushed, not merged.** The gate is
-green on it: `pnpm lint`, `pnpm typecheck`, **236 tests across 30 files plus the
-15-test second isolation pass**, `pnpm --filter @kakeibo/web build`, and
-`pnpm injection:report` still at a 100% block rate.
+The product surfaces are built. `/` is a landing, `/chat` is the agent,
+`/dashboard` and `/evals` are paper, `/runs` and `/admin` stayed terminal.
+`apps/web/DESIGN.md` and `apps/web/.impeccable/design.json` record the system
+**from the built world** — if the code and DESIGN.md disagree, one of them is a
+bug, and the design detector will tell you which.
 
-The owner picked the direction in two structured rounds; these are decided and
-not to be re-opened:
+The gate on `main`: `pnpm lint`, `pnpm typecheck`, **236 tests across 30 files
+plus the 15-test second isolation pass**, `pnpm --filter @kakeibo/web build`,
+`pnpm injection:report` at 100%, and
+`node ~/.claude/skills/impeccable/scripts/detect.mjs --json <targets>` at zero
+findings.
 
-| | |
+Four things Phase 2 fixed that were not UI:
+
+- **The reaper deleted the current day's rate-limit counters.** `quota.ts` writes
+  `window_start` as the UTC day; `reaper.ts` compared it to a bare
+  `current_date`, which is the *session* timezone's day. For the 5.5 hours
+  between local midnight and UTC midnight those differ, so the nightly sweep
+  reset every per-IP quota early. It was live, and it was the one site Plan C's
+  UTC sweep missed. See rule 11.
+- **The dashboard counted salary as a subscription.** `detectRecurring` finds
+  anything on a cadence, income postings are negative, and "Monthly
+  subscriptions" summed all of them — reporting −₹1,50,472.03 across "11
+  merchants" on every month since it shipped.
+- **`listRuns`, `getRun` and `cacheStats`** joined `isolation.test.ts`, closing
+  the rule-7 gap the previous handoff left open.
+- **`flag_anomalies` stopped printing paise at people.** The detail string is
+  tool output the fixtures hash over, so it is unchanged on the wire; `sigma`
+  and `meanMinor` ride alongside it and the dashboard formats at the display
+  boundary.
+
+The four owner decisions from the Phase 2 direction round are in the decided
+table at the bottom. The no-accent one is still the load-bearing one.
+
+### Next: Plan D, written and ready to execute
+
+`docs/superpowers/plans/2026-08-10-public-launch-surfaces-and-deploy.md` — ten
+tasks, fifty-four steps, every one with the code in it. Execute with
+`/subagent-driven-development` (a fresh agent per task, review between) or
+`/executing-plans`.
+
+**The owner cut sign-up entirely on 2026-08-10.** Plan D's scope is therefore:
+
+| In | Out |
 | --- | --- |
-| Ground | **Warm paper, light** for product pages |
-| Type | **Serif display + sans body**; mono only for code, IDs and terminal pages |
-| The seam | **Hard cut, shared nav** — crossing to `/runs` or `/admin` flips the ground entirely |
-| Accent | **None.** Sumi ink on paper; colour only where it means something |
-| Machinery on `/chat` | **A ledger margin rail** — answer as prose, tool calls and cost posting beside it |
-| `/chat` empty state | **A ruled question list** of real questions in the book's voice |
+| `/sign-in` — unlinked, email+password, the operator's door to `/admin` | Any sign-up page or form |
+| `/privacy`, including a delete-everything control | `/settings` |
+| `/terms` | Google OAuth |
+| Turnstile in front of `/api/chat` | |
+| The Vercel + Neon deploy | |
 
-**What the branch contains** (`git log main..ui-overhaul` for the commits):
+Task 1 amends the design spec **before** anything is built against the opposite:
+§7 still lists `/settings` and §1 still says an account is how you persist.
+Neither is true any more, and code that silently contradicts its own spec reads
+as a bug to the next person.
 
-- `apps/web/src/app/globals.css` — two palettes in one file. A `paper`/`sumi`
-  ramp at hue ~85 for the product genre, the incumbent cool `ink` ramp kept
-  unchanged for the terminal genre, status colours in two tunings, and the
-  browser surfaces (selection, caret, scrollbars, focus rings) themed per genre.
-- **Route groups `(paper)` and `(terminal)`.** Each layout paints its own
-  full-height ground via `[data-genre]`; `body` owns neither, which is what
-  lets a nested route change worlds without fighting the root.
-- `apps/web/src/components/ledger.tsx` — the paper primitives. Rules, not
-  cards: a section is a ruled band with its heading sitting on the rule. There
-  are no cards in a 家計簿.
-- `apps/web/src/components/bars.tsx` — `SpendBars` and `BudgetMeter`.
-- `apps/web/src/components/exchange.tsx` — the exchange primitives: the ledger
-  spread, the margin rail, the turn account, the confirmation slip. **Shared by
-  `/chat` and by the landing page's recorded demo, and that sharing is
-  load-bearing rather than tidy** — the landing's claim is "this is the thing
-  itself, recorded", so if the demo drew its own rules the first thing a
-  visitor would notice on reaching `/chat` is that the demo was a different
-  product.
-- `apps/web/src/components/mark.tsx` — the 家計簿 mark and wordmark, authored
-  SVG in `currentColor`. It is one cell of a ledger grid, ruled into a wide
-  description column and a narrow amount column, with the accountant's double
-  rule struck under the amount. Because every stroke is `currentColor`, the
-  same mark is sumi on paper and phosphor on black; the seam does not need two
-  logos.
-- `apps/web/src/app/(paper)/page.tsx` — the landing, built as a **statement of
-  account for the system itself**: ruled line items, each claim with the
-  measured figure that backs it, closing under a double rule. Every figure is
-  read out of `evals/report/latest.json` or counted off the tool registry at
-  render time, so no number on it can drift from the repo.
-- `apps/web/src/app/(paper)/chat/page.tsx` — the agent, moved from `/`.
-- `apps/web/src/app/(paper)/evals/page.tsx` — the eval report, moved out of the
-  terminal genre. A trace is a machine's own record and belongs in the machine
-  room; an eval report is a *finding*, written for a person deciding whether to
-  believe the thing, which makes it a product surface.
-- `apps/web/src/app/(paper)/dashboard/page.tsx` — the dashboard, with month
-  navigation across the seed range.
-- `apps/web/src/lib/report.ts` — one loader for `evals/report/latest.json`, and
-  the extractor that picks the recorded exchange the landing replays. Both
-  pages read the same file on purpose: a landing quoting a pass rate the eval
-  report disagrees with is worse than a landing with no pass rate on it.
-- `apps/web/src/app/opengraph-image.jpg`, `icon.png`, `apple-icon.png` — the
-  link-preview card and the favicons, as Next file conventions so the tags and
-  their dimensions come off the files rather than from hand-written metadata.
-  The icons are the mark rendered from its own SVG, not redrawn.
-- Two self-hosted faces via `@fontsource-variable`: **Source Serif 4** display,
-  **Public Sans** body. Both were chosen partly for *not* being on the design
-  skill's banned list of training-data defaults; if you swap them, check that
-  list first.
+Three consequences of the cut, so nobody rediscovers them:
 
-**No page carries a generated image, and that was a decision.** The launch
-prompt names Vertex Imagen 4 Ultra for the landing. What that page actually
-needed was proof, and the proof was already in the repo: a real turn from the
-last eval run — its question, the tools it called, the answer it gave, the gate
-it stopped at, and what it cost — replayed in the same components the live page
-uses. A generated hero above that would have been the only untrue thing on it.
+- No visitor can create an account, so **every** visitor is anonymous and the
+  24-hour reaper applies to all of them without exception.
+- The manual `email_verified` statement is permanent, not a stopgap — Google
+  OAuth was the intended fix and it no longer has a user to serve.
+- `repointOwner` is *not* dead code: signing in as operator while holding an
+  anonymous session still fires the link hook and repoints that ledger.
 
-Imagen earned its place somewhere else: `apps/web/src/app/opengraph-image.jpg`,
-the link preview, which PRODUCT.md implies is the first impression the site gets
-to make and which had no design on it at all. The plate is a generated sheet of
-ledger paper; every glyph on it is composited by the browser in the real Source
-Serif 4. **Generate material, never lettering** — a model rendering type gets
-letterforms almost right, and almost right on a wordmark is worse than no image.
-Its four figures are the measured ones, so `pnpm eval` changing them means the
-card is wrong until it is regenerated — which is why the generator is committed
-at `scripts/brand/` rather than left in a scratchpad. The launch prompt keeps
-design tooling out of the repo, and that rule is about design *references*; a
-build step for a committed asset whose numbers must stay reproducible is a
-different thing. `scripts/brand/imagen.py` carries the full recipe, the exact
-plate prompt, and the two rejected candidates with the reasons.
+**A worktree is already set up and green:** `.worktrees/plan-d` on branch
+`plan-d`, branched from `main`, dependencies installed, `.env` copied, baseline
+236 + 15 passing.
 
-### Not started: Plan D
-
-Needs writing with `/writing-plans`. Scope, from the design spec: the sign-in /
-sign-up / `/settings` pages, `/privacy` and `/terms` (all paper-genre product
-pages — the world and its primitives now exist, so build them out of
-`components/ledger.tsx` rather than inventing a third vocabulary), Turnstile on
-the anonymous entry point (§5 layer 4), and the Vercel + Neon deploy (§10). The
-deploy already has the pieces Plan C built for it: `ALLOW_DESTRUCTIVE_RESET` and
-`assertResettable` in `packages/ledger/src/reset-guard.ts` exist so a
-production `DATABASE_URL` in a local shell cannot eat a live database with one
-`pnpm eval`.
-
-`/privacy` has a specific obligation, not boilerplate: design spec §9.6 says
-trace payloads contain tool arguments and results, so an operator reading a
-trace is reading that visitor's ledger contents. The page must say so plainly.
+Task 10 needs the owner and says so — see "What needs the owner" below. Its
+ordering section is the load-bearing part of the whole plan.
 
 ## Start here
 
 ```bash
 pnpm install
 pnpm db:up && pnpm db:migrate && pnpm db:seed
-pnpm test                       # expect 233 + 12, all green
+pnpm test                       # expect 236 + 15, all green
 ```
 
-To pick up the branch:
+To pick up Plan D:
 
 ```bash
-cd .worktrees/ui-overhaul       # or: git worktree add .worktrees/ui-overhaul ui-overhaul
+cd .worktrees/plan-d            # already exists; if not:
+                                #   git worktree add .worktrees/plan-d -b plan-d main
 pnpm install && cp ../../.env .env
 PORT=3100 BETTER_AUTH_URL=http://localhost:3100 pnpm dev
 ```
+
+`.worktrees/ui-overhaul` and `.worktrees/operator-dashboard` are both merged and
+are now only a way to serve a stale copy of the app by accident. Remove them
+when convenient:
+
+```bash
+git worktree remove .worktrees/ui-overhaul
+git worktree remove .worktrees/operator-dashboard
+git branch -d ui-overhaul operator-dashboard
+```
+
+**Put worktrees in `.worktrees/`, never in `.claude/worktrees/`.** The harness's
+own worktree tool defaults to the latter, and `biome.json` excludes `**/.claude`
+— correctly, since that directory is skill files — so `pnpm lint` inside such a
+worktree reports *"Checked 0 files"* and exits non-zero. It fails loudly rather
+than silently, which is the only mercy in it. `.worktrees/` is gitignored and
+demonstrably works.
 
 **Use a port nothing else is on, and set `BETTER_AUTH_URL` to match it.** A
 `next dev` left running on 3000 from another worktree serves *that* worktree
@@ -269,6 +260,23 @@ habits worth keeping:
   and pg toward the browser bundle. The `./*` subpath export already exists, so
   this costs nothing but knowing to do it. The same rule is why `packages/mcp`
   imports core through subpaths (CLAUDE.md, Layout).
+
+**Generating images.**
+
+- Imagen 4 Ultra works, via `scripts/brand/imagen.py`. The key comes from the
+  environment or `.env` and never touches a command line.
+- **Put the call in a file and run the file.** An inline
+  `python3 -c "..."` that contains a key and posts to an external host has the
+  shape of credential exfiltration, and the harness's safety classifier blocks
+  it on shape, not intent. The same code in a script runs without complaint.
+  This cost most of an afternoon before the owner pointed it out.
+- **The model generates material, never lettering.** Every glyph on the social
+  card is composited by a real browser in the real Source Serif 4. A model sets
+  type that is almost right, and almost right on a wordmark is worse than no
+  image at all. When it was asked for a photographed account book it rendered
+  the word AMOUNTS into the page — legibly, and still wrong to ship.
+- The card's four figures are the measured ones. `pnpm eval` moving them means
+  the card is stale until it is regenerated; the recipe is in the script header.
 
 **The provider.**
 
@@ -417,6 +425,29 @@ habits worth keeping:
 **Nothing on `/admin` or `/runs` was restyled.** They are the terminal genre by
 decision, not by neglect, and the only change they saw was the shared nav.
 
+**`apps/web/PRODUCT.md` predates the current product-record schema.** The
+impeccable tooling flags it `route`-severity: it has no schema stamp and none of
+the sections that version adds (Positioning, Operating Context, Evidence on
+Hand, Product Principles). Repaired by `/impeccable init`, which is an
+interview — the answers cannot be inferred, which is why it was left rather than
+guessed at.
+
+**No per-route surface briefs.** The impeccable flow offers them; the durable
+strategy for `/` and `/chat` went into the direction contracts at the top of
+each page file instead, on the grounds that a contract in the file you are
+editing gets read and a sidecar drifts. If you disagree, `surface-brief.mjs`
+is still there.
+
+**At the write gate, `/chat` leaves ~330px of empty prose column** beside the
+running margin, because a suspended turn has produced two lines of text and the
+margin has a full account. The finish review scored it non-blocking; it is how a
+ledger looks when the note is short.
+
+**No page carries an image.** The only generated asset is the social card, which
+never appears on a surface. A photographed account book and a full-bleed paper
+band behind the landing header were both built and rejected — the reasons are in
+`scripts/brand/imagen.py` so nobody generates them twice.
+
 Not gaps, for the avoidance of a second look: `adminGetRun` and everything else
 in `packages/ledger/src/repo/admin.ts` are deliberately absent from the
 isolation suite. They read across owners on purpose, which is what
@@ -432,7 +463,15 @@ locally and the deployed origin in production. Ask for them when Plan D
 deploys.
 
 **Anything Plan D needs**: a Neon database, a Vercel project, a Cloudflare
-Turnstile site key. All of them are account creation, which the owner does.
+Turnstile site (both keys — the site key is public and also goes in
+`NEXT_PUBLIC_TURNSTILE_SITE_KEY`). All of them are account creation, which the
+owner does. Plan D Task 10 lists every variable and its value.
+
+**The Neon step has an order.** Create the project, then create the `app_user`
+role, *then* migrate. `scripts/db-up.sh` only creates the role; the grants live
+in the migration `packages/ledger/drizzle/0002_rls.sql`, which does
+`GRANT ... TO app_user` and fails outright if the role does not exist yet. And
+if `APP_DATABASE_URL` ends up empty, row-level security is silently inert.
 
 **`RATE_LIMIT_SALT` in production.** It defaults to empty, which is fine
 locally. Empty in production makes the stored per-IP hashes a plain
