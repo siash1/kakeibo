@@ -36,19 +36,25 @@ export {
   requireAccount,
 } from './repo/accounts'
 export {
+  type AdminRun,
   type AdminSession,
+  type AdminUser,
   adminOwnerId,
   assertAdmin,
   type BudgetPanel,
   budgetPanel,
   type HealthPanel,
   healthPanel,
+  type MapPoint,
+  mapPanel,
+  recentRuns,
   type SafetyPanel,
   safetyPanel,
   type ToolStat,
   type TrafficPanel,
   toolsPanel,
   trafficPanel,
+  usersPanel,
 } from './repo/admin'
 export {
   createConversation,

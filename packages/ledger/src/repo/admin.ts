@@ -1,5 +1,5 @@
 import { env } from '@kakeibo/core/env'
-import { and, countDistinct, eq, gte, sql } from 'drizzle-orm'
+import { and, count, countDistinct, desc, eq, gte, isNotNull, sql } from 'drizzle-orm'
 import { user } from '../auth-schema'
 import { adminDb } from '../db'
 import { traceEvents, traceRuns } from '../schema'
@@ -199,7 +199,16 @@ export async function budgetPanel(_session: AdminSession): Promise<BudgetPanel> 
   }
 }
 
-/** Who is visiting (spec §9.5): counts, not identities — no IP or user agent leaves `trace_runs`. */
+/**
+ * Who is visiting (spec §9.5): counts, not identities — no IP or user agent
+ * leaves `trace_runs`.
+ *
+ * All four bounds below are built from `UTC_DAY_START`, the same constant
+ * `budgetPanel` and `WINDOW` use, rather than from a bare `current_date`. A
+ * bare `current_date` casts back through the session's timezone
+ * (`Asia/Kolkata` on this database) — left alone, "spend today" on the budget
+ * panel and "visitors today" here would silently mean two different days.
+ */
 export async function trafficPanel(_session: AdminSession): Promise<TrafficPanel> {
   const db = unscoped()
 
@@ -207,7 +216,7 @@ export async function trafficPanel(_session: AdminSession): Promise<TrafficPanel
     const [row] = await db
       .select({ n: countDistinct(traceRuns.ownerId) })
       .from(traceRuns)
-      .where(gte(traceRuns.startedAt, sql`current_date - ${days} * interval '1 day'`))
+      .where(gte(traceRuns.startedAt, sql`${UTC_DAY_START} - ${days} * interval '1 day'`))
     return Number(row?.n ?? 0)
   }
 
@@ -224,7 +233,7 @@ export async function trafficPanel(_session: AdminSession): Promise<TrafficPanel
     })
     .from(traceRuns)
     .innerJoin(user, eq(user.id, traceRuns.ownerId))
-    .where(gte(traceRuns.startedAt, sql`current_date - ${DAYS} * interval '1 day'`))
+    .where(gte(traceRuns.startedAt, sql`${UTC_DAY_START} - ${DAYS} * interval '1 day'`))
 
   const anonymous = Number(kinds?.anonymous ?? 0)
   const signedIn = Number(kinds?.signedIn ?? 0)
@@ -242,8 +251,25 @@ export async function trafficPanel(_session: AdminSession): Promise<TrafficPanel
     .innerJoin(user, eq(user.id, traceRuns.ownerId))
     .where(
       and(
-        gte(traceRuns.startedAt, sql`current_date - 7 * interval '1 day'`),
-        sql`${user.createdAt} < current_date`,
+        gte(traceRuns.startedAt, sql`${UTC_DAY_START} - 7 * interval '1 day'`),
+        // `user.created_at` is `timestamp` *without* time zone (see
+        // auth-schema.ts), so it does not carry the instant it was written at —
+        // it carries whatever `now()` looked like once cast into the session's
+        // TimeZone at insert time (confirmed live: under Asia/Kolkata,
+        // `now()::timestamp` reads back as the +05:30 wall clock, not UTC).
+        // `UTC_DAY_START` is a `timestamptz`, so comparing it against the naive
+        // column directly would silently re-apply the session's *current*
+        // TimeZone to `user.created_at` on the way in — correct only if the
+        // session timezone never changes between insert and query, which is not
+        // a bet worth taking twice in the same file.
+        //
+        // Casting forward, `created_at::timestamptz`, reinterprets that naive
+        // wall-clock value in the session's *current* TimeZone and recovers the
+        // original instant — the exact inverse of the cast that stored it, and
+        // correct regardless of which zone the session happens to be (verified:
+        // `(now()::timestamp)::timestamptz = now()`). That is what belongs on
+        // the left of a `timestamptz` comparison.
+        sql`(${user.createdAt}::timestamptz) < ${UTC_DAY_START}`,
       ),
     )
 
@@ -450,4 +476,173 @@ export async function toolsPanel(_session: AdminSession): Promise<ToolStat[]> {
       // earning selection and which are not.
       .sort((a, b) => b.calls - a.calls || a.name.localeCompare(b.name))
   )
+}
+
+export interface AdminRun {
+  id: string
+  startedAt: Date
+  channel: string
+  model: string
+  status: string
+  inputTokens: number
+  cachedTokens: number
+  outputTokens: number
+  costUsdEst: number
+  latencyMs: number
+  ownerId: string
+  ownerEmail: string | null
+  ownerIsAnonymous: boolean
+}
+
+/**
+ * The existing `/runs` table (spec §9.3, item 6), unscoped and widened with an
+ * owner column — which is the entire difference between a visitor's own view
+ * and the operator's.
+ */
+export async function recentRuns(_session: AdminSession, limit = 100): Promise<AdminRun[]> {
+  const rows = await unscoped()
+    .select({
+      id: traceRuns.id,
+      startedAt: traceRuns.startedAt,
+      channel: traceRuns.channel,
+      model: traceRuns.model,
+      status: traceRuns.status,
+      inputTokens: traceRuns.inputTokens,
+      cachedTokens: traceRuns.cachedTokens,
+      outputTokens: traceRuns.outputTokens,
+      costUsdEst: traceRuns.costUsdEst,
+      latencyMs: traceRuns.latencyMs,
+      ownerId: traceRuns.ownerId,
+      ownerEmail: user.email,
+      ownerIsAnonymous: user.isAnonymous,
+    })
+    .from(traceRuns)
+    // Left join: the reaper deletes anonymous users, and their runs go with
+    // them through the cascade — but a run whose owner vanished between the
+    // reaper and this query should still appear here rather than dropping
+    // out of the audit trail.
+    .leftJoin(user, eq(user.id, traceRuns.ownerId))
+    .orderBy(desc(traceRuns.startedAt))
+    .limit(limit)
+
+  return rows.map((row) => ({
+    ...row,
+    inputTokens: Number(row.inputTokens),
+    cachedTokens: Number(row.cachedTokens),
+    outputTokens: Number(row.outputTokens),
+    costUsdEst: Number(row.costUsdEst),
+    ownerEmail: row.ownerEmail ?? null,
+    ownerIsAnonymous: row.ownerIsAnonymous === true,
+  }))
+}
+
+export interface AdminUser {
+  id: string
+  email: string
+  isAnonymous: boolean
+  createdAt: Date
+  lastSeenAt: Date | null
+  messagesToday: number
+  costUsdToDate: number
+  blockedAt: Date | null
+}
+
+/**
+ * Who is using the site and what they are costing (spec §9.3, item 7). Cost
+ * per user is the reason this panel exists at all rather than being a list of
+ * email addresses — it is how abuse becomes visible.
+ *
+ * One left join and one group, rather than a query per user. `messagesToday`
+ * is bounded by `UTC_DAY_START` for the same reason `trafficPanel` was: a
+ * bare `current_date` would report "today" in the session's timezone while
+ * every other panel on this dashboard means the UTC day.
+ */
+export async function usersPanel(_session: AdminSession, limit = 200): Promise<AdminUser[]> {
+  const rows = await unscoped()
+    .select({
+      id: user.id,
+      email: user.email,
+      isAnonymous: user.isAnonymous,
+      createdAt: user.createdAt,
+      blockedAt: user.blockedAt,
+      lastSeenAt: sql<Date | null>`max(${traceRuns.startedAt})`,
+      messagesToday: sql<string>`count(${traceRuns.id}) filter (where ${traceRuns.startedAt} >= ${UTC_DAY_START})`,
+      costUsdToDate: sql<string>`coalesce(sum(${traceRuns.costUsdEst}), 0)`,
+    })
+    .from(user)
+    .leftJoin(traceRuns, eq(traceRuns.ownerId, user.id))
+    .groupBy(user.id)
+    // Busiest (most recently active) first. NULLS LAST is not the default for
+    // DESC in Postgres — without it, visitors who never ran a turn (whose
+    // `max(started_at)` is null) would sort to the very top, ahead of anyone
+    // who has actually spent money, and `limit` would cut off the page before
+    // ever reaching the accounts this panel exists to surface.
+    .orderBy(sql`max(${traceRuns.startedAt}) desc nulls last`)
+    .limit(limit)
+
+  return rows.map((row) => ({
+    id: row.id,
+    email: row.email,
+    isAnonymous: row.isAnonymous === true,
+    createdAt: row.createdAt,
+    lastSeenAt: row.lastSeenAt,
+    messagesToday: Number(row.messagesToday),
+    costUsdToDate: Number(row.costUsdToDate),
+    blockedAt: row.blockedAt,
+  }))
+}
+
+export interface MapPoint {
+  country: string | null
+  region: string | null
+  city: string | null
+  lat: number
+  lon: number
+  runs: number
+}
+
+/**
+ * Approximate visitor locations, sized by activity (spec §9.3 item 8, §9.5).
+ *
+ * Returns only located runs. A run with no coordinates is not a point at
+ * (0, 0) — that is open ocean off West Africa, and a map that puts every
+ * local development turn there is worse than one that omits them. Windowed
+ * to the same trailing 30 days as the health, safety and tools panels: the
+ * map shows current activity, not a permanent location history.
+ */
+export async function mapPanel(_session: AdminSession): Promise<MapPoint[]> {
+  const rows = await unscoped()
+    .select({
+      country: traceRuns.geoCountry,
+      region: traceRuns.geoRegion,
+      city: traceRuns.geoCity,
+      lat: traceRuns.geoLat,
+      lon: traceRuns.geoLon,
+      runs: count(),
+    })
+    .from(traceRuns)
+    .where(
+      and(
+        isNotNull(traceRuns.geoLat),
+        isNotNull(traceRuns.geoLon),
+        gte(traceRuns.startedAt, WINDOW),
+      ),
+    )
+    .groupBy(
+      traceRuns.geoCountry,
+      traceRuns.geoRegion,
+      traceRuns.geoCity,
+      traceRuns.geoLat,
+      traceRuns.geoLon,
+    )
+    .orderBy(desc(count()))
+
+  return rows.map((row) => ({
+    country: row.country,
+    region: row.region,
+    city: row.city,
+    lat: Number(row.lat),
+    lon: Number(row.lon),
+    runs: Number(row.runs),
+  }))
 }

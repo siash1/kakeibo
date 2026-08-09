@@ -12,9 +12,12 @@ import {
   budgetPanel,
   type HealthPanel,
   healthPanel,
+  mapPanel,
+  recentRuns,
   safetyPanel,
   toolsPanel,
   trafficPanel,
+  usersPanel,
 } from './admin'
 
 function allowlist(value: string): void {
@@ -205,6 +208,53 @@ describe('trafficPanel', () => {
   it('counts a visitor whose account predates today as returning', async () => {
     const panel = await trafficPanel(session())
     expect(panel.returning).toBeGreaterThanOrEqual(1)
+  })
+
+  it('excludes a run from the leaked pre-UTC-midnight band from "visitors today"', async () => {
+    // Kolkata is UTC+5:30, so Kolkata midnight lands 5.5h before UTC midnight.
+    // A bare `current_date` (session tz) casts back to that earlier instant,
+    // so a run in the 5.5h band before UTC midnight reads as "today" under the
+    // old bound and "yesterday" under the correct UTC-anchored one. This owner
+    // has no other rows, so any leak shows up as a bump in `visitors.today`.
+    const erin = asOwnerId('00000000-0000-4000-8000-0000000ad006')
+    await resetOwners(erin)
+    const before = await trafficPanel(session())
+    await adminDb().insert(traceRuns).values({
+      ownerId: erin,
+      provider: 'test',
+      model: 'test',
+      channel: 'web',
+      status: 'ok',
+      startedAt: sql`(((now() at time zone 'utc')::date)::timestamp at time zone 'utc') - interval '2 hours'`,
+    })
+    const after = await trafficPanel(session())
+    expect(after.visitors.today).toBe(before.visitors.today)
+    await resetOwners(erin)
+  })
+
+  it('does not count an account created in the leaked band as predating today', async () => {
+    // `user.created_at` is a naive `timestamp` (see auth-schema.ts), written as
+    // the session-tz wall clock at insert time. A value of "today, 02:00" in
+    // that naive column is *not* before Kolkata midnight (old bound: not
+    // returning-eligible) but its real instant — 2026-08-08T20:30Z, reinterpreting
+    // the naive value in the session's own tz — *is* before UTC midnight (new
+    // bound: returning-eligible once they also have a run this week). The two
+    // bounds disagree, which is exactly what pins the fix down.
+    const frank = asOwnerId('00000000-0000-4000-8000-0000000ad007')
+    await resetOwners(frank)
+    const before = await trafficPanel(session())
+    await adminDb()
+      .update(user)
+      .set({ createdAt: sql`current_date + interval '2 hours'` })
+      .where(eq(user.id, frank))
+    await runOn(frank, 0, 0.001)
+    const after = await trafficPanel(session())
+    // Isolated as a delta, not an absolute count: carol (this block's own
+    // fixture) already satisfies "returning" on her own, so an absolute
+    // assertion would pass even if frank's leaked-band account were wrongly
+    // excluded.
+    expect(after.returning - before.returning).toBe(1)
+    await resetOwners(frank)
   })
 })
 
@@ -458,7 +508,6 @@ describe('healthPanel', () => {
 
   afterAll(async () => {
     await resetOwners(healthy)
-    await closeDb()
   })
 
   it('reports the status split and latency percentiles', async () => {
@@ -475,5 +524,152 @@ describe('healthPanel', () => {
     expect(panel.iterationLimitHits - before.iterationLimitHits).toBe(1)
     // A percentage, and 0 rather than NaN when no tool has run at all.
     expect(panel.toolErrorPercent).toBeGreaterThanOrEqual(0)
+  })
+})
+
+describe('recentRuns', () => {
+  const runnerA = asOwnerId('00000000-0000-4000-8000-0000000ad020')
+  const runnerB = asOwnerId('00000000-0000-4000-8000-0000000ad021')
+
+  beforeAll(async () => {
+    await resetOwners(runnerA, runnerB)
+    await runOn(runnerA, 1, 0.01)
+    await runOn(runnerB, 0, 0.02)
+  }, 60_000)
+
+  afterAll(async () => {
+    await resetOwners(runnerA, runnerB)
+  })
+
+  it('shows who each run belonged to, which the scoped view cannot', async () => {
+    const runs = await recentRuns(session(), 1000)
+    const owners = new Set(runs.map((run) => run.ownerId))
+    // Not just >1 in the abstract: both of this block's own owners must be
+    // present, so the assertion does not depend on ambient rows some other
+    // suite happened to leave behind.
+    expect(owners.has(runnerA)).toBe(true)
+    expect(owners.has(runnerB)).toBe(true)
+    expect(runs[0]!.startedAt.getTime()).toBeGreaterThanOrEqual(runs.at(-1)!.startedAt.getTime())
+  })
+
+  it('resolves the owner through a join the scoped /runs view has no reason to do', async () => {
+    const runs = await recentRuns(session(), 1000)
+    const runB = runs.find((run) => run.ownerId === runnerB)
+    expect(runB?.ownerEmail).toBe(`${runnerB}@kakeibo.local`)
+    expect(runB?.ownerIsAnonymous).toBe(false)
+    expect(runB?.costUsdEst).toBeCloseTo(0.02, 6)
+  })
+})
+
+describe('usersPanel', () => {
+  const bob2 = asOwnerId('00000000-0000-4000-8000-0000000ad022')
+
+  beforeAll(async () => {
+    await resetOwners(alice, bob2)
+    await runOn(alice, 0, 0.03)
+    await runOn(alice, 0, 0.05)
+  }, 60_000)
+
+  afterAll(async () => {
+    await resetOwners(alice, bob2)
+  })
+
+  it('attributes cost and today’s messages to each visitor', async () => {
+    const users = await usersPanel(session(), 1000)
+    const row = users.find((entry) => entry.id === alice)
+    expect(row?.messagesToday).toBe(2)
+    expect(row?.costUsdToDate).toBeCloseTo(0.08, 6)
+    expect(row?.blockedAt).toBeNull()
+  })
+
+  it('shows a visitor who has never run a turn, with zeroes', async () => {
+    // resetOwners creates the principal without any runs. Someone who signed
+    // up and never spoke is exactly who you want to see on this panel.
+    const users = await usersPanel(session(), 1000)
+    const row = users.find((entry) => entry.id === bob2)
+    expect(row?.messagesToday).toBe(0)
+    expect(row?.costUsdToDate).toBe(0)
+    expect(users.every((entry) => Number.isFinite(entry.costUsdToDate))).toBe(true)
+  })
+
+  it('sorts by last activity with never-active visitors last, not first', async () => {
+    // NULLS FIRST is Postgres's default for `ORDER BY ... DESC`. Left alone,
+    // every visitor who never ran a turn would sort ahead of every visitor who
+    // did, and `limit` would cut the page off before it ever reached the
+    // accounts that are actually spending money.
+    const users = await usersPanel(session(), 1000)
+    const aliceIndex = users.findIndex((entry) => entry.id === alice)
+    const bobIndex = users.findIndex((entry) => entry.id === bob2)
+    expect(aliceIndex).toBeGreaterThanOrEqual(0)
+    expect(bobIndex).toBeGreaterThan(aliceIndex)
+  })
+
+  it('counts "today" from UTC midnight, not the session timezone', async () => {
+    // Same leaked band as trafficPanel's regression test: a run 2 hours before
+    // UTC midnight is still "today" under a bare `current_date` (Kolkata) but
+    // is "yesterday" under the correct UTC-anchored bound.
+    const before = await usersPanel(session(), 1000)
+    const beforeCount = before.find((entry) => entry.id === alice)?.messagesToday ?? 0
+    await adminDb().insert(traceRuns).values({
+      ownerId: alice,
+      provider: 'test',
+      model: 'test',
+      channel: 'web',
+      status: 'ok',
+      costUsdEst: '0.000001',
+      startedAt: sql`(((now() at time zone 'utc')::date)::timestamp at time zone 'utc') - interval '2 hours'`,
+    })
+    const after = await usersPanel(session(), 1000)
+    const afterCount = after.find((entry) => entry.id === alice)?.messagesToday ?? 0
+    expect(afterCount).toBe(beforeCount)
+  })
+})
+
+describe('mapPanel', () => {
+  const mapped = asOwnerId('00000000-0000-4000-8000-0000000ad030')
+
+  beforeAll(async () => {
+    await resetOwners(mapped)
+  })
+
+  afterAll(async () => {
+    await resetOwners(mapped)
+    await closeDb()
+  })
+
+  it('groups located runs into points and drops unlocated ones', async () => {
+    await adminDb()
+      .insert(traceRuns)
+      .values([
+        {
+          ownerId: mapped,
+          provider: 'test',
+          model: 'test',
+          channel: 'web',
+          geoCountry: 'IN',
+          geoCity: 'Bengaluru',
+          geoLat: 12.9716,
+          geoLon: 77.5946,
+        },
+        {
+          ownerId: mapped,
+          provider: 'test',
+          model: 'test',
+          channel: 'web',
+          geoCountry: 'IN',
+          geoCity: 'Bengaluru',
+          geoLat: 12.9716,
+          geoLon: 77.5946,
+        },
+        // No location at all: local development, or an address the edge could
+        // not resolve. It must not become a point at (0, 0) in the Gulf of
+        // Guinea, which is where "default the coordinates" always lands.
+        { ownerId: mapped, provider: 'test', model: 'test', channel: 'cli' },
+      ])
+
+    const points = await mapPanel(session())
+    const bengaluru = points.find((point) => point.city === 'Bengaluru')
+    expect(bengaluru?.runs).toBe(2)
+    expect(points.every((point) => point.lat !== 0 || point.lon !== 0)).toBe(true)
   })
 })
