@@ -285,7 +285,7 @@ export default function LandingPage() {
                 {exchange.gate ? (
                   <div className="max-w-[68ch] border-y-2 border-sumi-900 py-4">
                     <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-                      <h3 className="font-serif text-[16px] font-semibold tracking-[-0.01em]">
+                      <h3 className="font-serif text-[17px] font-semibold tracking-[-0.01em]">
                         The turn stopped before it wrote
                       </h3>
                       <Mark tone="warn">gate</Mark>

@@ -60,11 +60,22 @@ typography:
     lineHeight: 1
     letterSpacing: "-0.02em"
     fontVariation: "tabular-nums lining-nums"
+  subhead:
+    fontFamily: "'Source Serif 4 Variable', Georgia, 'Times New Roman', serif"
+    fontSize: "17px"
+    fontWeight: 600
+    lineHeight: 1.3
+    letterSpacing: "-0.01em"
   body:
     fontFamily: "'Public Sans Variable', system-ui, -apple-system, sans-serif"
     fontSize: "15px"
     fontWeight: 400
     lineHeight: 1.7
+  action:
+    fontFamily: "'Public Sans Variable', system-ui, -apple-system, sans-serif"
+    fontSize: "14px"
+    fontWeight: 400
+    lineHeight: 1.4
   secondary:
     fontFamily: "'Public Sans Variable', system-ui, -apple-system, sans-serif"
     fontSize: "13px"
@@ -81,6 +92,7 @@ typography:
 rounded:
   none: "0px"
   bar: "3px"
+  thumb: "5px"
 spacing:
   row: "10px"
   band: "24px"
@@ -159,7 +171,7 @@ cards, no tiled grid-paper texture, no entrance animation on content.
 - No accent colour; colour appears only where it carries meaning
 - Serif for figures and headings, sans for prose, mono only for code and IDs
 - Tabular numerals everywhere an amount appears
-- Square corners; the only radius on the site is the cap of a bar
+- Square corners; the only radii are a bar's cap and the scrollbar thumb
 - Two grounds with a hard seam and one shared nav
 
 ## Colors
@@ -258,9 +270,15 @@ are self-hosted variable fonts.
   question, set as the heading of its own entry. Also the composer's input.
 - **Section** (600, 19px, -0.01em, serif): a section heading sitting *on* its
   rule, not above a box.
+- **Subhead** (600, 17px, -0.01em, serif): a heading *inside* a ruled band — the
+  confirmation slip, the landing's gate note. Subordinate to Section, which is
+  why it is a step rather than the same one.
 - **Figure** (400, 30px, 1, -0.02em, serif, tabular): a headline amount or count.
   Figures are serif because the serif is the book's own voice for numbers.
 - **Body** (400, 15px, 1.7, max 68ch): prose, answers, explanation.
+- **Action** (400, 14px): every button, primary and secondary, and any link
+  acting as one. It is the only step that exists to be clicked, which is why it
+  sits between body and secondary rather than matching either.
 - **Secondary** (400, 13px): the sentence under a heading, a row's supporting
   detail.
 - **Label** (400, 11–12px, 0.08–0.11em, uppercase): column heads, units, tiers,
@@ -342,9 +360,13 @@ a fill or a rule's colour; it never lifts anything.
 ## Shapes
 
 **Square by default.** Buttons, inputs, slips, tables and rows have no radius at
-all — `0px` is the system value, not an oversight. The one exception is the cap
-of a horizontal bar (`3px` on the trailing edge only), which reads as ink laid
-down with a pen rather than as a rounded rectangle.
+all — `0px` is the system value, not an oversight. There are exactly two
+exceptions, both on drawn marks rather than on containers: the cap of a
+horizontal bar (`3px`, trailing edge only), which reads as ink laid down with a
+pen rather than as a rounded rectangle, and the scrollbar thumb (`5px` on a 10px
+track, so a full pill) in both genres, where the platform convention is stronger
+than the house style and fighting it makes the page feel broken rather than
+considered.
 
 There are no containers. The form language is entirely lines: horizontal rules
 divide, a single vertical hairline separates the ledger spread's two columns,
