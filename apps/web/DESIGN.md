@@ -429,6 +429,24 @@ database waiting on the answer. It carries a serif heading in the visitor's term
 of the literal arguments, and two buttons. Money in the argument table shows the
 formatted amount first and the integer minor units beside it.
 
+### The Social Card (signature)
+
+`opengraph-image.jpg`, 1200×630, and the only place in the system where a
+generated image appears. PRODUCT.md says the visitor arrives from a CV, a README
+or a link in a message, which makes the link preview the first impression the
+site gets to make.
+
+It is a sheet of ledger paper — generated with Imagen 4 Ultra, warmer than
+`paper-50` and lifted toward it with a translucent wash — carrying the real
+wordmark, the display line, and four measured figures over a `1.5px` sumi rule.
+The paper's own printed column rules line up with the layout's right edge, which
+is the whole reason a generated plate beats a flat fill here.
+
+**The Model Makes Material, Never Lettering Rule.** Every glyph on the card is
+composited in the real Source Serif 4 by the browser. A model rendering type
+produces letterforms that are almost right, and almost right on a wordmark is
+worse than no image at all. Generate paper, ink, and texture; set type yourself.
+
 ### Named Rules
 
 **The Same-Component Rule.** The landing's recorded demo is built from the exact
@@ -477,3 +495,10 @@ product.
   them.
 - **Don't** print a truncated machine payload as if it were a summary. Say
   something derived from it, or say nothing.
+- **Don't** print raw minor units in front of a person. Tool results name their
+  units in paise and that is correct on the wire; money is formatted at the
+  display boundary, and the boundary is the component.
+- **Don't** let a model render type. It generates material — paper, ink,
+  texture; the browser sets the lettering in the real face.
+- **Don't** put a decorative image on a product surface. The one generated asset
+  in this system is the social card, which never appears on a page.
