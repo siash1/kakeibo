@@ -1,4 +1,12 @@
 export {
+  account,
+  type Session,
+  session,
+  type User,
+  user,
+  verification,
+} from './auth-schema'
+export {
   ALL_ACCOUNT_NAMES,
   ALL_CATEGORIES,
   EXPENSE_CATEGORIES,
@@ -28,6 +36,30 @@ export {
   requireAccount,
 } from './repo/accounts'
 export {
+  createConversation,
+  latestConversation,
+  loadHistory,
+  replaceHistory,
+  saveSuspendedTurn,
+  takeSuspendedTurn,
+} from './repo/conversations'
+export { ensureLedger } from './repo/demo'
+export {
+  deleteOwnerRows,
+  OWNER_SCOPED_TABLES,
+  type RepointResult,
+  repointOwner,
+} from './repo/link'
+export {
+  consumeQuota,
+  hashIp,
+  messagesToday,
+  type QuotaReason,
+  type QuotaVerdict,
+  spendToday,
+} from './repo/quota'
+export { type ReapResult, reap } from './repo/reaper'
+export {
   type Anomaly,
   budgetStatus,
   detectRecurring,
@@ -50,6 +82,7 @@ export {
   transactionsByIds,
   UnbalancedTransactionError,
 } from './repo/transactions'
+export { deleteUser, ensureOwnerUser, userExists } from './repo/users'
 export {
   DbMemoryStore,
   listBudgets,

@@ -1,8 +1,9 @@
 import { formatUsd } from '@kakeibo/core'
-import { DEV_OWNER_ID, getRun } from '@kakeibo/ledger'
+import { getRun } from '@kakeibo/ledger'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { Badge, Card, Stat, statusTone } from '@/components/ui'
+import { viewerOwner } from '@/lib/owner'
 
 /**
  * The per-run timeline (spec 13).
@@ -29,7 +30,10 @@ interface EventRow {
 
 export default async function RunPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const data = await getRun(DEV_OWNER_ID, id)
+  // 404 rather than 403 for someone else's run: getRun is owner-scoped and
+  // returns nothing, so the page cannot even confirm the run exists.
+  const viewer = await viewerOwner()
+  const data = viewer ? await getRun(viewer.owner, id) : undefined
   if (!data) notFound()
 
   const { run, events } = data

@@ -30,6 +30,8 @@ interface ConfirmEvent {
   tool: string
   summary: string
   args: unknown
+  /** Which paused turn this card belongs to; answering resumes exactly that one. */
+  suspendedTurnId: string
   answered?: boolean
   allowed?: boolean
 }
@@ -66,8 +68,13 @@ export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
+  const [limited, setLimited] = useState<string | null>(null)
   const endRef = useRef<HTMLDivElement>(null)
-  const sessionId = useRef<string>('web-session')
+  /**
+   * Chosen by the server on the first turn and echoed back on every one after,
+   * so a reload picks the thread up rather than starting a second.
+   */
+  const conversationId = useRef<string | undefined>(undefined)
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -82,76 +89,55 @@ export default function ChatPage() {
     })
   }, [])
 
-  const answer = useCallback(
-    async (id: string, allow: boolean) => {
-      await fetch('/api/confirm', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, allow }),
-      })
-      patchLast((message) => ({
-        ...message,
-        items: message.items.map((item) =>
-          item.kind === 'confirm' && item.id === id
-            ? { ...item, answered: true, allowed: allow }
-            : item,
-        ),
-      }))
-    },
-    [patchLast],
-  )
-
-  const send = useCallback(
-    async (text: string) => {
-      if (!text.trim() || busy) return
-      setBusy(true)
-      setInput('')
-      setMessages((prev) => [
-        ...prev,
-        { role: 'user', items: [{ kind: 'text', text }] },
-        { role: 'assistant', items: [] },
-      ])
-
-      try {
-        const response = await fetch('/api/chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message: text, sessionId: sessionId.current }),
-        })
-        if (!response.body) throw new Error('no response body')
-
-        const reader = response.body.getReader()
-        const decoder = new TextDecoder()
-        let buffer = ''
-
-        for (;;) {
-          const { done, value } = await reader.read()
-          if (done) break
-          buffer += decoder.decode(value, { stream: true })
-
-          // SSE frames are separated by a blank line.
-          for (;;) {
-            const split = buffer.indexOf('\n\n')
-            if (split < 0) break
-            const frame = buffer.slice(0, split)
-            buffer = buffer.slice(split + 2)
-            const eventLine = frame.split('\n').find((l) => l.startsWith('event: '))
-            const dataLine = frame.split('\n').find((l) => l.startsWith('data: '))
-            if (!eventLine || !dataLine) continue
-            handleEvent(eventLine.slice(7), JSON.parse(dataLine.slice(6)))
-          }
-        }
-      } catch (error) {
+  /**
+   * Reads one SSE response into the last assistant message.
+   *
+   * Both /api/chat and /api/confirm return the same event stream, because they
+   * are two halves of one turn — the second picks up where the first suspended.
+   */
+  const consume = useCallback(
+    async (response: Response) => {
+      if (response.status === 503) {
+        const body = (await response.json()) as { error?: string }
+        setLimited(body.error ?? 'Live chat is unavailable right now.')
+        return
+      }
+      if (response.status === 410) {
         patchLast((message) => ({
           ...message,
           items: [
             ...message.items,
-            { kind: 'text', text: `\n\nError: ${error instanceof Error ? error.message : error}` },
+            { kind: 'text', text: '\n\nThat confirmation had already expired.' },
           ],
         }))
-      } finally {
-        setBusy(false)
-        endRef.current?.scrollIntoView({ behavior: 'smooth' })
+        return
+      }
+      if (!response.ok) {
+        const body = (await response.json().catch(() => ({}))) as { error?: string }
+        throw new Error(body.error ?? `HTTP ${response.status}`)
+      }
+      if (!response.body) throw new Error('no response body')
+
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      for (;;) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+
+        // SSE frames are separated by a blank line.
+        for (;;) {
+          const split = buffer.indexOf('\n\n')
+          if (split < 0) break
+          const frame = buffer.slice(0, split)
+          buffer = buffer.slice(split + 2)
+          const eventLine = frame.split('\n').find((l) => l.startsWith('event: '))
+          const dataLine = frame.split('\n').find((l) => l.startsWith('data: '))
+          if (!eventLine || !dataLine) continue
+          handleEvent(eventLine.slice(7), JSON.parse(dataLine.slice(6)))
+        }
       }
 
       function handleEvent(event: string, data: Record<string, unknown>) {
@@ -200,10 +186,12 @@ export default function ChatPage() {
                 tool: String(data.tool),
                 summary: String(data.summary),
                 args: data.args,
+                suspendedTurnId: String(data.suspended_turn_id),
               },
             ],
           }))
         } else if (event === 'turn_end') {
+          if (data.conversation_id) conversationId.current = String(data.conversation_id)
           patchLast((message) => ({ ...message, usage: data as unknown as Message['usage'] }))
         } else if (event === 'error') {
           patchLast((message) => ({
@@ -214,7 +202,89 @@ export default function ChatPage() {
         endRef.current?.scrollIntoView({ behavior: 'smooth' })
       }
     },
-    [busy, patchLast],
+    [patchLast],
+  )
+
+  /**
+   * Answers a confirmation card, which resumes the paused turn.
+   *
+   * The rest of the turn streams back on *this* response. Nothing is waiting on
+   * the original request — it ended when the turn suspended.
+   */
+  const answer = useCallback(
+    async (item: ConfirmEvent, allow: boolean) => {
+      if (busy) return
+      setBusy(true)
+      patchLast((message) => ({
+        ...message,
+        items: message.items.map((existing) =>
+          existing.kind === 'confirm' && existing.id === item.id
+            ? { ...existing, answered: true, allowed: allow }
+            : existing,
+        ),
+      }))
+
+      try {
+        await consume(
+          await fetch('/api/confirm', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              suspendedTurnId: item.suspendedTurnId,
+              decisions: [{ id: item.id, allowed: allow }],
+            }),
+          }),
+        )
+      } catch (error) {
+        patchLast((message) => ({
+          ...message,
+          items: [
+            ...message.items,
+            { kind: 'text', text: `\n\nError: ${error instanceof Error ? error.message : error}` },
+          ],
+        }))
+      } finally {
+        setBusy(false)
+        endRef.current?.scrollIntoView({ behavior: 'smooth' })
+      }
+    },
+    [busy, consume, patchLast],
+  )
+
+  const send = useCallback(
+    async (text: string) => {
+      if (!text.trim() || busy) return
+      setBusy(true)
+      setLimited(null)
+      setInput('')
+      setMessages((prev) => [
+        ...prev,
+        { role: 'user', items: [{ kind: 'text', text }] },
+        { role: 'assistant', items: [] },
+      ])
+
+      try {
+        await consume(
+          await fetch('/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: text, conversationId: conversationId.current }),
+          }),
+        )
+      } catch (error) {
+        patchLast((message) => ({
+          ...message,
+          items: [
+            ...message.items,
+            { kind: 'text', text: `\n\nError: ${error instanceof Error ? error.message : error}` },
+          ],
+        }))
+      } finally {
+        setBusy(false)
+        endRef.current?.scrollIntoView({ behavior: 'smooth' })
+      }
+    },
+    [busy, consume, patchLast],
   )
 
   return (
@@ -268,6 +338,12 @@ export default function ChatPage() {
         <div ref={endRef} />
       </div>
 
+      {limited ? (
+        <div className="mb-3 rounded-md border border-warn/40 bg-warn/5 px-3.5 py-2.5 text-xs text-ink-100">
+          {limited}
+        </div>
+      ) : null}
+
       <form
         onSubmit={(e) => {
           e.preventDefault()
@@ -299,7 +375,7 @@ function ItemView({
   onAnswer,
 }: {
   item: Item
-  onAnswer: (id: string, allow: boolean) => void
+  onAnswer: (item: ConfirmEvent, allow: boolean) => void
 }) {
   if (item.kind === 'text') {
     return (
@@ -348,14 +424,14 @@ function ItemView({
         <div className="mt-3 flex gap-2">
           <button
             type="button"
-            onClick={() => onAnswer(item.id, true)}
+            onClick={() => onAnswer(item, true)}
             className="rounded border border-ok/40 px-3 py-1 font-mono text-xs text-ok transition-colors hover:bg-ok/10"
           >
             allow
           </button>
           <button
             type="button"
-            onClick={() => onAnswer(item.id, false)}
+            onClick={() => onAnswer(item, false)}
             className="rounded border border-ink-700 px-3 py-1 font-mono text-xs text-ink-300 transition-colors hover:bg-ink-850"
           >
             decline

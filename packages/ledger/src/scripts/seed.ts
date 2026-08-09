@@ -8,6 +8,7 @@ import { formatMinor, minorToDecimalString } from '../money'
 import { DEV_OWNER_ID } from '../owner'
 import { ensureSeedAccounts } from '../repo/accounts'
 import { findUnbalancedTransactions } from '../repo/transactions'
+import { ensureOwnerUser } from '../repo/users'
 import { generateSeedData, RATES } from '../seed/generate'
 
 /**
@@ -47,6 +48,9 @@ async function main(): Promise<void> {
   console.log(`  ${labels.hostile.length} hostile descriptions planted`)
   console.log(`  ${labels.anomalies.length} anomalies planted`)
 
+  // owner_id references user(id). Better Auth creates that row for a real
+  // visitor; the fixed local owner has no such request to ride in on.
+  await ensureOwnerUser(DEV_OWNER_ID)
   await ensureSeedAccounts(DEV_OWNER_ID)
   console.log('Chart of accounts ready.')
 

@@ -55,7 +55,7 @@ Copied verbatim from `CLAUDE.md`; every task's requirements include these.
 
 **Why a policy object replaces the bare callback.** Today `runTurn` takes `confirm: ConfirmFn` and blocks on it. That works when the decider is in the same process — the CLI's readline, an eval script — and cannot work when it is a browser on the far side of a second HTTP request. Making the *strategy* explicit lets the same loop serve both without a boolean flag that means "actually don't call this".
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 // packages/core/src/suspend.test.ts
@@ -93,12 +93,12 @@ describe('suspend vocabulary', () => {
 })
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `npx vitest run packages/core/src/suspend.test.ts`
 Expected: FAIL — `Cannot find module './suspend'`.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 ```ts
 // packages/core/src/suspend.ts
@@ -168,12 +168,12 @@ export function isWritePending(state: SuspendedState): boolean {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run packages/core/src/suspend.test.ts`
 Expected: PASS, 2 tests.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/core/src/suspend.ts packages/core/src/suspend.test.ts
@@ -198,7 +198,7 @@ request, and on serverless there is no shared memory to await across."
 
 Without this a suspended turn produces two `trace_runs` rows, the trace viewer shows half a conversation twice, and the per-owner quota counts one turn as two.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 // packages/ledger/src/repo/tracer.test.ts
@@ -248,12 +248,12 @@ describe('resuming a run', () => {
 })
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `npx vitest run packages/ledger/src/repo/tracer.test.ts`
 Expected: FAIL — `tracer.resumeRun is not a function`.
 
-- [ ] **Step 3: Add `resumeRun` to the interface and both implementations**
+- [x] **Step 3: Add `resumeRun` to the interface and both implementations**
 
 In `packages/core/src/trace.ts`:
 
@@ -293,12 +293,12 @@ async resumeRun(runId: string): Promise<TraceRunHandle> {
 
 Refactor the body shared with `startRun` into a private `handle(id, nextSeq)` returning the `TraceRunHandle`, so the event and finish logic exists once.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run packages/ledger/src/repo/tracer.test.ts`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/core/src/trace.ts packages/ledger/src/repo/tracer.ts packages/ledger/src/repo/tracer.test.ts
@@ -324,7 +324,7 @@ rather than restarting at zero, which the timeline sorts on."
 
 **The parallel-batch rule.** The provider requires the number of `functionResponse` parts to equal the number of `functionCall` parts in the turn being answered. So the loop cannot answer one call in a batch and suspend on another: **all** writes in a batch suspend together, and the read-tier results from that same batch are carried in `completedResults` rather than re-run.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 // packages/core/src/suspend-loop.test.ts
@@ -444,12 +444,12 @@ describe('suspend', () => {
 })
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `npx vitest run packages/core/src/suspend-loop.test.ts`
 Expected: FAIL — `confirmPolicy` is not a known option.
 
-- [ ] **Step 3: Implement the suspend path**
+- [x] **Step 3: Implement the suspend path**
 
 In `packages/core/src/loop.ts`:
 
@@ -522,12 +522,12 @@ const decide = async (request: ConfirmRequest): Promise<boolean> => {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run packages/core/src/suspend-loop.test.ts`
 Expected: PASS, 3 tests.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/core/src/loop.ts packages/core/src/suspend-loop.test.ts
@@ -552,7 +552,7 @@ shift underneath the decision."
 **Interfaces:**
 - Produces: `RunTurnOptions.resume?: ResumeInput`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 // append to packages/core/src/suspend-loop.test.ts
@@ -612,12 +612,12 @@ describe('resume', () => {
 })
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `npx vitest run packages/core/src/suspend-loop.test.ts -t resume`
 Expected: FAIL — `resume` is not a known option.
 
-- [ ] **Step 3: Implement the resume path**
+- [x] **Step 3: Implement the resume path**
 
 At the top of `runTurn`, before the user message is appended:
 
@@ -679,12 +679,12 @@ if (options.resume) {
 
 Guard the "append user message" and `contextManager.fit` steps behind `if (!options.resume)`.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run packages/core/src/suspend-loop.test.ts`
 Expected: PASS, 4 tests.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/core/src/loop.ts packages/core/src/suspend-loop.test.ts
@@ -709,7 +709,7 @@ correctness rather than cosmetics."
 
 Nothing compiles until this is done: `confirm` is gone from `RunTurnOptions`.
 
-- [ ] **Step 1: Update each surface**
+- [x] **Step 1: Update each surface**
 
 | Surface | Policy |
 | --- | --- |
@@ -723,7 +723,7 @@ Nothing compiles until this is done: `confirm` is gone from `RunTurnOptions`.
 
 The eval runner previously recorded confirmations by capturing `ConfirmRequest`s. Under a policy there is no callback, so it reads proposals from `result.toolCalls` (which records `tier` and `confirmed`) instead. `no_unconfirmed_writes` keeps working because it already reasons over `toolCalls`.
 
-- [ ] **Step 2: Verify the whole suite**
+- [x] **Step 2: Verify the whole suite**
 
 ```bash
 pnpm lint && pnpm typecheck && pnpm test
@@ -731,7 +731,7 @@ pnpm lint && pnpm typecheck && pnpm test
 
 Expected: all green, including the injection suite — the guardrail behaviour is unchanged, only the plumbing.
 
-- [ ] **Step 3: Verify the CLI still gates writes**
+- [x] **Step 3: Verify the CLI still gates writes**
 
 ```bash
 printf 'Set my Dining budget for 2025-07 to 8000 rupees.\nn\n/exit\n' | pnpm cli
@@ -739,7 +739,7 @@ printf 'Set my Dining budget for 2025-07 to 8000 rupees.\nn\n/exit\n' | pnpm cli
 
 Expected: the confirm prompt appears, `n` declines, and the reply acknowledges the cancellation without retrying.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add -A
@@ -759,14 +759,14 @@ was already doing for no_unconfirmed_writes."
 - Create: `packages/ledger/src/auth-schema.ts`, `apps/web/src/lib/auth.ts`, `apps/web/src/lib/auth-client.ts`, `apps/web/src/app/api/auth/[...all]/route.ts`
 - Modify: `packages/ledger/src/db.ts`, `.env.example`, `apps/web/package.json`
 
-- [ ] **Step 1: Install**
+- [x] **Step 1: Install**
 
 ```bash
 pnpm --filter @kakeibo/web add better-auth
 pnpm --filter @kakeibo/ledger add better-auth
 ```
 
-- [ ] **Step 2: Generate the auth schema**
+- [x] **Step 2: Generate the auth schema**
 
 ```bash
 cd apps/web && npx @better-auth/cli generate --output ../../packages/ledger/src/auth-schema.ts
@@ -781,7 +781,7 @@ blockedAt: timestamp('blocked_at', { withTimezone: true }),
 isAnonymous: boolean('is_anonymous').notNull().default(false),
 ```
 
-- [ ] **Step 3: Wire the auth instance**
+- [x] **Step 3: Wire the auth instance**
 
 ```ts
 // apps/web/src/lib/auth.ts
@@ -814,7 +814,7 @@ export const auth = betterAuth({
 })
 ```
 
-- [ ] **Step 4: Route handler and client**
+- [x] **Step 4: Route handler and client**
 
 ```ts
 // apps/web/src/app/api/auth/[...all]/route.ts
@@ -832,7 +832,7 @@ import { createAuthClient } from 'better-auth/react'
 export const authClient = createAuthClient({ plugins: [anonymousClient()] })
 ```
 
-- [ ] **Step 5: Env**
+- [x] **Step 5: Env**
 
 Add to `.env.example` with empty values, and to `.env` with real ones:
 
@@ -845,7 +845,7 @@ GOOGLE_CLIENT_SECRET=
 
 Generate a local secret with `openssl rand -base64 32`. Google OAuth may be left empty locally; email/password and anonymous both work without it, and the sign-in UI hides the Google button when the client id is absent.
 
-- [ ] **Step 6: Generate and apply the migration**
+- [x] **Step 6: Generate and apply the migration**
 
 ```bash
 cd packages/ledger && npx drizzle-kit generate && cd ../.. && pnpm db:migrate
@@ -853,7 +853,7 @@ cd packages/ledger && npx drizzle-kit generate && cd ../.. && pnpm db:migrate
 
 Verify: `select count(*) from information_schema.tables where table_name in ('user','session','account','verification')` returns 4.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add -A
@@ -882,7 +882,7 @@ every authenticated request."
 
 The anonymous plugin deletes the anonymous user immediately after `onLinkAccount`, so the ledger must be repointed inside that hook. One transaction; a partial repoint would strand rows against a user row that is about to disappear.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 // packages/ledger/src/repo/link.test.ts
@@ -935,12 +935,12 @@ describe('repointOwner', () => {
 })
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `npx vitest run packages/ledger/src/repo/link.test.ts`
 Expected: FAIL — `Cannot find module './link'`.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 ```ts
 // packages/ledger/src/repo/link.ts
@@ -986,12 +986,12 @@ export async function repointOwner(
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run packages/ledger/src/repo/link.test.ts`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/ledger/src/repo/link.ts packages/ledger/src/repo/link.test.ts
@@ -1016,11 +1016,11 @@ runs on adminDb."
 **Interfaces:**
 - Produces: `createConversation`, `appendMessages`, `loadHistory`, `saveSuspendedTurn`, `takeSuspendedTurn`.
 
-- [ ] **Step 1: Add the tables**
+- [x] **Step 1: Add the tables**
 
 `conversations`, `conversation_messages`, `suspended_turns` per the spec, each with `ownerId: ownerId()` and an RLS policy in a new hand-written migration mirroring `0002_rls.sql`.
 
-- [ ] **Step 2: Write the failing test**
+- [x] **Step 2: Write the failing test**
 
 ```ts
 // packages/ledger/src/repo/conversations.test.ts — the assertion that matters
@@ -1055,11 +1055,11 @@ it('round-trips providerMeta, including the thought signature', async () => {
 
 Plus: `takeSuspendedTurn` returns the state once and deletes it, so a decision cannot be replayed to run a write twice.
 
-- [ ] **Step 3: Run test to verify it fails**, implement, **Step 4: verify it passes**
+- [x] **Step 3: Run test to verify it fails**, implement, **Step 4: verify it passes**
 
 Store `message` as `jsonb` verbatim — no mapping, no field selection.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add -A
@@ -1085,7 +1085,7 @@ run the same write twice."
 **Interfaces:**
 - Produces: `checkQuota({ owner, ipHash, isAnonymous }): Promise<QuotaVerdict>` where `QuotaVerdict = { allowed: true } | { allowed: false; reason: 'owner_quota' | 'ip_quota' | 'daily_cap' | 'blocked' }`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Cover each verdict separately, and one that matters more than it looks:
 
@@ -1099,11 +1099,11 @@ it('counts a suspended turn once, not twice', async () => {
 })
 ```
 
-- [ ] **Step 2: Implement**
+- [x] **Step 2: Implement**
 
 Owner and global from `trace_runs`; IP from `rate_limits` keyed by `sha256(ip + RATE_LIMIT_SALT + date)` so raw addresses are never stored. New env with defaults: `ANON_DAILY_MESSAGE_QUOTA=8`, `USER_DAILY_MESSAGE_QUOTA=25`, `IP_DAILY_MESSAGE_QUOTA=20`, `GLOBAL_DAILY_BUDGET_USD=0.667`, `RATE_LIMIT_SALT=`.
 
-- [ ] **Step 3: Verify, Step 4: Commit**
+- [x] **Step 3: Verify, Step 4: Commit**
 
 ```bash
 git commit -m "Add per-owner, per-IP and global budget limits
@@ -1126,7 +1126,7 @@ last and independently of the other two."
 - Modify: `apps/web/src/app/api/chat/route.ts`, `apps/web/src/app/api/confirm/route.ts`, `apps/web/src/app/page.tsx`
 - Delete: `apps/web/src/lib/session.ts`
 
-- [ ] **Step 1: Session → owner**
+- [x] **Step 1: Session → owner**
 
 ```ts
 // apps/web/src/lib/owner.ts
@@ -1139,13 +1139,13 @@ last and independently of the other two."
 export async function resolveOwner(request: Request): Promise<ResolvedOwner> { /* ... */ }
 ```
 
-- [ ] **Step 2: Replace the globalThis session**
+- [x] **Step 2: Replace the globalThis session**
 
 `/api/chat` loads history from Postgres, runs the turn with `{ mode: 'suspend' }`, and on a suspended result persists the state and emits `confirm_request` per pending write, then closes the stream. `/api/confirm` takes the decisions, calls `takeSuspendedTurn`, and resumes — streaming the rest of the turn back on *that* response.
 
 This removes the cross-request promise entirely, which is the point: nothing is awaited across invocations any more.
 
-- [ ] **Step 3: Verify end to end**
+- [x] **Step 3: Verify end to end**
 
 ```bash
 pnpm dev
@@ -1154,7 +1154,7 @@ pnpm dev
 # quota path: 9th anonymous message returns 503 with reason owner_quota
 ```
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ---
 
@@ -1181,3 +1181,67 @@ Deletes anonymous users older than 24 hours; `on delete cascade` removes their l
 **Type consistency.** `ConfirmPolicy` is the parameter name in Tasks 1, 3, 4, 5. `SuspendedState` field names are identical in Tasks 1, 3, 4, 8. `repointOwner(from, to)` uses plain `string`, not `OwnerId`, because Better Auth hands over raw ids and validating them is `asOwnerId`'s job at the call site.
 
 **The risk worth naming.** Task 5 changes every caller in one commit, exactly as Plan A's Task 8 did, and for the same reason: removing `confirm` from `RunTurnOptions` breaks all of them at once. Its safeguard is the same — the CLI must still gate a write and the injection suite must stay at 100%.
+
+---
+
+## What actually happened
+
+All twelve tasks are implemented and merged. Where the work diverged from the
+plan, it diverged for a reason worth recording.
+
+**Task 5 was not finished.** The web chat route still passed `confirm`, so the
+branch did not typecheck when this session picked it up. Completing it was the
+first commit.
+
+**`owner_id` gained its foreign key here rather than being deferred again.**
+Plan A left `references "user"(id)` for Plan B because the table did not exist
+yet; Task 6 creates it, so the constraint landed with it. That forced
+`user.id` to be a uuid (`advanced.database.generateId: 'uuid'`), since nine
+ledger tables carry `owner_id uuid` and Postgres will not join text to uuid, and
+it forced every surface that writes without a session — seeding, the eval
+harness, the test helpers — to create its fixed owner's principal first. The
+alternative was widening every owner column to text and giving up `asOwnerId`'s
+validation.
+
+**The auth tables have their privileges revoked from `app_user`.** Not in the
+plan. `0002_rls.sql`'s `ALTER DEFAULT PRIVILEGES` grants the application role
+everything on tables created after it, and those four carry no `owner_id` for a
+policy to scope by — so the application role would have been able to read every
+visitor's email. Referential integrity is unaffected because Postgres runs it as
+the referenced table's owner, which is asserted rather than assumed.
+
+**`repointOwner` discards rather than merges when the target already has a
+ledger.** The plan did not anticipate that `accounts` is unique on
+`(owner_id, name)` and every ledger is a clone of the same corpus, so both sides
+have a "Groceries" — repointing on top of one is a constraint violation, and
+merging by name would double every figure in every report.
+
+**`appendMessages` became `replaceHistory`.** The context manager rewrites
+history when the window fills, swapping a run of older messages for a summary,
+and an append-only table cannot express that. It also removes the need to
+compute a delta at resume, which is not computable after an eviction.
+
+**`consumeQuota` checks and charges in one call**, rather than the plan's pure
+`checkQuota`. Split in two, a caller that forgets the second half has silently
+granted an unlimited per-address quota and nothing fails. It also takes
+`kind: 'message' | 'resume'`, because a resume was already charged when the turn
+started and a turn nobody can finish leaves a write dangling.
+
+**`ensureLedger` was missing from the plan entirely.** Task 10 cannot be
+demonstrated without it: a new visitor's ledger is empty and the agent has
+nothing to talk about. It clones the corpus lazily on the first request that
+needs one, and deliberately without `deterministicIds` — those keys are derived
+from the CSV row alone and carry no owner, so the second visitor cloned would
+collide with the first on the transactions primary key.
+
+**The reaper also sweeps `rate_limits`.** It is the one table with no
+`owner_id`, which is deliberate, and which means nothing else would ever delete
+a row from it.
+
+**One bug was found and fixed by the end-to-end verification.** The resume path
+and `executeToolUse` each recorded a `confirm` trace event for the same
+decision, under different ids — which would have doubled every "writes allowed"
+figure the admin dashboard computes from the timeline in Plan C.
+
+Left for Plan C, unchanged: §3.5 geolocation, §9 admin dashboard, Turnstile,
+deployment, and the sign-in UI.

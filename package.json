@@ -17,6 +17,7 @@
     "db:migrate": "pnpm --filter @kakeibo/ledger migrate",
     "db:seed": "pnpm --filter @kakeibo/ledger seed",
     "db:reset": "pnpm --filter @kakeibo/ledger reset",
+    "db:reap": "pnpm --filter @kakeibo/ledger reap",
     "check:providers": "tsx scripts/check-providers.ts",
     "eval": "pnpm --filter @kakeibo/evals run:eval",
     "eval:smoke": "pnpm --filter @kakeibo/evals run:eval --filter smoke",

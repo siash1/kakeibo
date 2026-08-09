@@ -41,7 +41,8 @@ describe('row-level security backstop', () => {
         select tablename from pg_tables
         where schemaname = 'public'
           and tablename in ('accounts','transactions','postings','rules','budgets',
-                            'memories','import_batches','trace_runs','trace_events')
+                            'memories','import_batches','trace_runs','trace_events',
+                            'conversations','conversation_messages','suspended_turns')
           and rowsecurity = false
       `),
     )
@@ -79,5 +80,56 @@ describe('row-level security backstop', () => {
 
     expect(thrown, 'the forged insert should have been rejected').toBeDefined()
     expect(reasons(thrown)).toMatch(/row-level security/i)
+  })
+})
+
+describe('the auth tables are out of the application role reach', () => {
+  it('refuses the application role a read of "user"', async () => {
+    // These four tables carry no owner_id, so row-level security has nothing to
+    // scope them by. Privileges are the only lever, and 0002's ALTER DEFAULT
+    // PRIVILEGES would otherwise have granted app_user everything on tables
+    // created after it. A SELECT here returns every visitor's email address.
+    let thrown: unknown
+    try {
+      await withOwner(alice, (tx) => tx.execute(sql`select id from "user" limit 1`))
+    } catch (error) {
+      thrown = error
+    }
+    expect(thrown, 'the application role should not be able to read "user"').toBeDefined()
+    expect(reasons(thrown)).toMatch(/permission denied/i)
+  })
+
+  it('still lets the application role write a ledger row for an owner it cannot read', async () => {
+    // Postgres runs referential integrity as the referenced table's owner, so
+    // revoking the privilege does not break the foreign key. If that were not
+    // true, revoking would have made the whole application unable to write.
+    await withOwner(alice, (tx) =>
+      tx.execute(
+        sql`insert into accounts (owner_id, name, type) values (${alice}, 'FK Probe', 'expense')`,
+      ),
+    )
+
+    const rows = await withOwner(alice, (tx) =>
+      tx.execute(sql`select name from accounts where name = 'FK Probe'`),
+    )
+    expect(rows.rows).toHaveLength(1)
+  })
+
+  it('refuses a ledger row whose owner has no principal', async () => {
+    // The foreign key is what makes owner_id mean user.id. Without it an
+    // invented uuid would silently own rows that no account can ever delete.
+    const ghost = asOwnerId('00000000-0000-4000-8000-00000000e999')
+    let thrown: unknown
+    try {
+      await withOwner(ghost, (tx) =>
+        tx.execute(
+          sql`insert into accounts (owner_id, name, type) values (${ghost}, 'Ghost', 'expense')`,
+        ),
+      )
+    } catch (error) {
+      thrown = error
+    }
+    expect(thrown, 'an owner with no user row should not be able to own anything').toBeDefined()
+    expect(reasons(thrown)).toMatch(/foreign key/i)
   })
 })

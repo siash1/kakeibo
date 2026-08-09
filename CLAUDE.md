@@ -51,6 +51,26 @@ These are decided and not up for re-litigation (see `docs/kakeibo_spec.md`):
    and is the only pass that actually tests the application's own scoping.
    Never "fix" a failure there by adjusting the assertion.
 
+   `owner_id` references `"user"(id)` — Better Auth's table, a reserved word,
+   quote it — `on delete cascade`. Deleting a user is the whole implementation
+   of both the anonymous reaper and "delete everything". If you add an
+   owner-scoped table, add it to `OWNED` in `packages/ledger/src/repo/link.ts`;
+   `repointOwner`, `deleteOwnerRows` and the test helpers all read that one
+   list, and a coverage test derives the expected set from the schema.
+
+8. **`runTurn` takes a `ConfirmPolicy`, not a callback.** `'inline'` for the
+   CLI, `'auto-allow'` / `'auto-deny'` for evals and MCP, `'suspend'` for the
+   web. Under `'suspend'` the loop stops at the first batch containing a write
+   and returns a `SuspendedState`; the caller persists it and a second request
+   resumes from a decision. Do not reintroduce a `confirm` callback the loop
+   awaits — on serverless there is no shared memory to await across, and that
+   is the whole reason the policy exists.
+
+9. **Anything that persists a `CanonicalMessage` stores it verbatim.** Gemini
+   3.x attaches an opaque `thoughtSignature` to `functionCall` parts, and
+   replaying a tool turn without it is a hard 400. A layer that normalises the
+   message shape breaks only on tool turns and only in production.
+
 ## Layout
 
 ```
