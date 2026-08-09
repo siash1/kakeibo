@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, gte, ilike, inArray, lte, or, sql } from 'drizzle-orm'
 import { UNCATEGORIZED } from '../categories'
-import { getDb } from '../db'
+import { withOwner } from '../db'
+import type { OwnerId } from '../owner'
 import { sumMinor } from '../money'
 import { accounts, postings, type Transaction, transactions } from '../schema'
 import { requireAccount } from './accounts'
@@ -41,14 +42,18 @@ export class UnbalancedTransactionError extends Error {
   }
 }
 
-export async function createTransaction(input: CreateTransactionInput): Promise<Transaction> {
+export async function createTransaction(
+  owner: OwnerId,
+  input: CreateTransactionInput,
+): Promise<Transaction> {
   assertBalanced(input.postings)
 
-  return getDb().transaction(async (tx) => {
+  return withOwner(owner, async (tx) => {
     const [row] = await tx
       .insert(transactions)
       .values({
         ...(input.id ? { id: input.id } : {}),
+        ownerId: owner,
         date: input.date,
         description: input.description,
         rawDescription: input.rawDescription ?? input.description,
@@ -58,6 +63,7 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
 
     await tx.insert(postings).values(
       input.postings.map((p) => ({
+        ownerId: owner,
         transactionId: row!.id,
         accountId: p.accountId,
         amountMinor: p.amountMinor,
@@ -70,16 +76,20 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
 }
 
 /** Bulk path for imports: one DB transaction for the whole batch. */
-export async function createTransactions(inputs: CreateTransactionInput[]): Promise<number> {
+export async function createTransactions(
+  owner: OwnerId,
+  inputs: CreateTransactionInput[],
+): Promise<number> {
   for (const input of inputs) assertBalanced(input.postings)
   if (inputs.length === 0) return 0
 
-  return getDb().transaction(async (tx) => {
+  return withOwner(owner, async (tx) => {
     const rows = await tx
       .insert(transactions)
       .values(
         inputs.map((input) => ({
           ...(input.id ? { id: input.id } : {}),
+          ownerId: owner,
           date: input.date,
           description: input.description,
           rawDescription: input.rawDescription ?? input.description,
@@ -90,6 +100,7 @@ export async function createTransactions(inputs: CreateTransactionInput[]): Prom
 
     const postingValues = inputs.flatMap((input, index) =>
       input.postings.map((p) => ({
+        ownerId: owner,
         transactionId: rows[index]!.id,
         accountId: p.accountId,
         amountMinor: p.amountMinor,
@@ -128,10 +139,12 @@ export interface SearchFilters {
 }
 
 export async function searchTransactions(
+  owner: OwnerId,
   filters: SearchFilters,
 ): Promise<TransactionWithPostings[]> {
-  const db = getDb()
-  const conditions = []
+  // Owner is the FIRST condition, so any scan is bounded by tenant before a
+  // single one of the user's own filters applies.
+  const conditions = [eq(transactions.ownerId, owner)]
 
   if (filters.query) {
     const pattern = `%${filters.query}%`
@@ -143,9 +156,9 @@ export async function searchTransactions(
   if (filters.to) conditions.push(lte(transactions.date, filters.to))
 
   if (filters.account) {
-    const account = await requireAccount(filters.account)
+    const account = await requireAccount(owner, filters.account)
     conditions.push(
-      sql`exists (select 1 from ${postings} p where p.transaction_id = ${transactions.id} and p.account_id = ${account.id})`,
+      sql`exists (select 1 from ${postings} p where p.transaction_id = ${transactions.id} and p.owner_id = ${owner} and p.account_id = ${account.id})`,
     )
   }
 
@@ -153,53 +166,67 @@ export async function searchTransactions(
   // two-posting entry is the absolute value of either side.
   if (filters.minMinor !== undefined) {
     conditions.push(
-      sql`exists (select 1 from ${postings} p where p.transaction_id = ${transactions.id} and abs(p.amount_minor) >= ${filters.minMinor})`,
+      sql`exists (select 1 from ${postings} p where p.transaction_id = ${transactions.id} and p.owner_id = ${owner} and abs(p.amount_minor) >= ${filters.minMinor})`,
     )
   }
   if (filters.maxMinor !== undefined) {
     conditions.push(
-      sql`not exists (select 1 from ${postings} p where p.transaction_id = ${transactions.id} and abs(p.amount_minor) > ${filters.maxMinor})`,
+      sql`not exists (select 1 from ${postings} p where p.transaction_id = ${transactions.id} and p.owner_id = ${owner} and abs(p.amount_minor) > ${filters.maxMinor})`,
     )
   }
 
-  const rows = await db
-    .select()
-    .from(transactions)
-    .where(conditions.length > 0 ? and(...conditions) : undefined)
+  const rows = await withOwner(owner, (tx) =>
+    tx
+      .select()
+      .from(transactions)
+      .where(and(...conditions))
     // The id tiebreaker is load-bearing: a bulk import gives every row the same
     // created_at, so without it Postgres may return same-date rows in any order.
     // That makes tool output non-reproducible, which breaks replay fixtures and
     // eval oracles alike.
-    .orderBy(desc(transactions.date), desc(transactions.createdAt), asc(transactions.id))
-    .limit(filters.limit ?? 20)
+      .orderBy(desc(transactions.date), desc(transactions.createdAt), asc(transactions.id))
+      .limit(filters.limit ?? 20),
+  )
 
-  return hydratePostings(rows)
+  return hydratePostings(owner, rows)
 }
 
-export async function transactionsByIds(ids: string[]): Promise<TransactionWithPostings[]> {
+export async function transactionsByIds(
+  owner: OwnerId,
+  ids: string[],
+): Promise<TransactionWithPostings[]> {
   if (ids.length === 0) return []
-  const rows = await getDb()
-    .select()
-    .from(transactions)
-    .where(inArray(transactions.id, ids))
-    .orderBy(asc(transactions.date))
-  return hydratePostings(rows)
+  const rows = await withOwner(owner, (tx) =>
+    tx
+      .select()
+      .from(transactions)
+      .where(and(eq(transactions.ownerId, owner), inArray(transactions.id, ids)))
+      .orderBy(asc(transactions.date)),
+  )
+  return hydratePostings(owner, rows)
 }
 
-async function hydratePostings(rows: Transaction[]): Promise<TransactionWithPostings[]> {
+// Takes the owner explicitly rather than inferring it from the rows it was
+// handed — inferring would trust the caller to have scoped already.
+async function hydratePostings(
+  owner: OwnerId,
+  rows: Transaction[],
+): Promise<TransactionWithPostings[]> {
   if (rows.length === 0) return []
   const ids = rows.map((r) => r.id)
-  const postingRows = await getDb()
-    .select({
+  const postingRows = await withOwner(owner, (tx) =>
+    tx
+      .select({
       transactionId: postings.transactionId,
       amountMinor: postings.amountMinor,
       currency: postings.currency,
       account: accounts.name,
       accountType: accounts.type,
     })
-    .from(postings)
-    .innerJoin(accounts, eq(accounts.id, postings.accountId))
-    .where(inArray(postings.transactionId, ids))
+      .from(postings)
+      .innerJoin(accounts, and(eq(accounts.id, postings.accountId), eq(accounts.ownerId, owner)))
+      .where(and(eq(postings.ownerId, owner), inArray(postings.transactionId, ids))),
+  )
 
   const byTransaction = new Map<string, TransactionWithPostings['postings']>()
   for (const row of postingRows) {
@@ -236,10 +263,11 @@ export interface CategorizeResult {
  * not a delete-and-reinsert.
  */
 export async function categorizeTransactions(
+  owner: OwnerId,
   transactionIds: string[],
   categoryName: string,
 ): Promise<CategorizeResult> {
-  const target = await requireAccount(categoryName)
+  const target = await requireAccount(owner, categoryName)
   if (target.type !== 'expense' && target.type !== 'income') {
     throw new Error(
       `"${target.name}" is a ${target.type} account. Transactions can only be categorised into expense or income accounts.`,
@@ -247,18 +275,19 @@ export async function categorizeTransactions(
   }
   if (transactionIds.length === 0) return { updated: 0, skipped: [] }
 
-  const db = getDb()
-  const candidates = await db
-    .select({
+  const candidates = await withOwner(owner, (tx) =>
+    tx
+      .select({
       postingId: postings.id,
       transactionId: postings.transactionId,
       accountId: postings.accountId,
       accountName: accounts.name,
       accountType: accounts.type,
     })
-    .from(postings)
-    .innerJoin(accounts, eq(accounts.id, postings.accountId))
-    .where(inArray(postings.transactionId, transactionIds))
+      .from(postings)
+      .innerJoin(accounts, and(eq(accounts.id, postings.accountId), eq(accounts.ownerId, owner)))
+      .where(and(eq(postings.ownerId, owner), inArray(postings.transactionId, transactionIds))),
+  )
 
   const byTransaction = new Map<string, typeof candidates>()
   for (const row of candidates) {
@@ -301,21 +330,31 @@ export async function categorizeTransactions(
   }
 
   if (toUpdate.length > 0) {
-    await db.update(postings).set({ accountId: target.id }).where(inArray(postings.id, toUpdate))
+    await withOwner(owner, (tx) =>
+      tx
+        .update(postings)
+        .set({ accountId: target.id })
+        .where(and(eq(postings.ownerId, owner), inArray(postings.id, toUpdate))),
+    )
   }
 
   return { updated: toUpdate.length, skipped }
 }
 
 /** Postings that sum to something other than zero. Should always be empty. */
-export async function findUnbalancedTransactions(): Promise<{ id: string; delta: number }[]> {
-  const rows = await getDb()
-    .select({
+export async function findUnbalancedTransactions(
+  owner: OwnerId,
+): Promise<{ id: string; delta: number }[]> {
+  const rows = await withOwner(owner, (tx) =>
+    tx
+      .select({
       id: postings.transactionId,
       delta: sql<number>`sum(${postings.amountMinor})::bigint`,
     })
-    .from(postings)
-    .groupBy(postings.transactionId)
-    .having(sql`sum(${postings.amountMinor}) <> 0`)
+      .from(postings)
+      .where(eq(postings.ownerId, owner))
+      .groupBy(postings.transactionId)
+      .having(sql`sum(${postings.amountMinor}) <> 0`),
+  )
   return rows.map((r) => ({ id: r.id, delta: Number(r.delta) }))
 }
