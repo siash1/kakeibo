@@ -35,6 +35,7 @@ export {
   listAccounts,
   requireAccount,
 } from './repo/accounts'
+export { OWNER_SCOPED_TABLES, type RepointResult, repointOwner } from './repo/link'
 export {
   type Anomaly,
   budgetStatus,

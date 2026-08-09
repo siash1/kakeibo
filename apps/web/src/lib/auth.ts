@@ -1,5 +1,5 @@
 import { env, loadEnv } from '@kakeibo/core/env'
-import { adminDb, schema } from '@kakeibo/ledger'
+import { adminDb, repointOwner, schema } from '@kakeibo/ledger'
 import { betterAuth } from 'better-auth'
 import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import { anonymous } from 'better-auth/plugins'
@@ -50,9 +50,12 @@ export const auth = betterAuth({
   },
   plugins: [
     anonymous({
-      // onLinkAccount, which repoints the anonymous visitor's ledger onto their
-      // new account, is added in Plan B task 7 together with the repointOwner
-      // transaction it calls.
+      onLinkAccount: async ({ anonymousUser, newUser }) => {
+        // The plugin deletes the anonymous user the moment this returns, and
+        // owner_id cascades from it — so the ledger has to change hands here,
+        // synchronously, rather than on the next request.
+        await repointOwner(anonymousUser.user.id, newUser.user.id)
+      },
     }),
   ],
 })
