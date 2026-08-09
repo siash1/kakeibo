@@ -13,6 +13,7 @@ import {
   unique,
   uuid,
 } from 'drizzle-orm/pg-core'
+import { user } from './auth-schema'
 
 /**
  * The ledger schema (spec 7).
@@ -30,13 +31,19 @@ import {
  */
 
 /**
- * Owner of the row.
+ * Owner of the row: always a Better Auth `user.id`, anonymous visitors
+ * included — they are users who have not attached credentials yet.
  *
- * No foreign key yet: the principal table arrives with Better Auth in Plan B,
- * and a column cannot reference a table that does not exist. Plan B adds
- * `references "user"(id) on delete cascade` in its own migration.
+ * The cascade is load-bearing rather than tidiness. Deleting a user is the
+ * whole implementation of two features: the 24-hour anonymous reaper, and the
+ * "delete everything" action on /settings. Without it each of them would need
+ * its own list of owner-scoped tables, and the table someone forgets to add is
+ * a row that outlives the account that owned it.
  */
-const ownerId = () => uuid('owner_id').notNull()
+const ownerId = () =>
+  uuid('owner_id')
+    .notNull()
+    .references(() => user.id, { onDelete: 'cascade' })
 
 export const accountTypeEnum = pgEnum('account_type', [
   'asset',

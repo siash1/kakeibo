@@ -46,6 +46,21 @@ const EnvSchema = z.object({
   ALLOW_WRITES: boolish.default(false),
   PORT: z.coerce.number().int().default(3000),
 
+  /**
+   * Auth (spec §2). Better Auth reads BETTER_AUTH_SECRET and BETTER_AUTH_URL
+   * from process.env itself; they are declared here so that every environment
+   * variable this repo needs is described in one schema, and so a missing
+   * secret is a startup error rather than a silently insecure default.
+   *
+   * Google's pair may be empty: email/password and anonymous sign-in need no
+   * external setup, and the sign-in UI hides the Google button when the client
+   * id is absent.
+   */
+  BETTER_AUTH_SECRET: z.string().default(''),
+  BETTER_AUTH_URL: z.string().default('http://localhost:3000'),
+  GOOGLE_CLIENT_ID: z.string().default(''),
+  GOOGLE_CLIENT_SECRET: z.string().default(''),
+
   /** Fixture modes (spec 8.2). RECORD writes fixtures, REPLAY reads them. */
   RECORD: boolish.default(false),
   REPLAY: boolish.default(false),

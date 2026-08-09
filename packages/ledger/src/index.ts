@@ -1,4 +1,12 @@
 export {
+  account,
+  type Session,
+  session,
+  type User,
+  user,
+  verification,
+} from './auth-schema'
+export {
   ALL_ACCOUNT_NAMES,
   ALL_CATEGORIES,
   EXPENSE_CATEGORIES,
@@ -50,6 +58,7 @@ export {
   transactionsByIds,
   UnbalancedTransactionError,
 } from './repo/transactions'
+export { deleteUser, ensureOwnerUser, userExists } from './repo/users'
 export {
   DbMemoryStore,
   listBudgets,

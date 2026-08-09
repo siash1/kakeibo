@@ -2,8 +2,17 @@ import { env } from '@kakeibo/core/env'
 import { sql } from 'drizzle-orm'
 import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres'
 import pg from 'pg'
+import * as authSchema from './auth-schema'
 import type { OwnerId } from './owner'
-import * as schema from './schema'
+import * as ledgerSchema from './schema'
+
+/**
+ * One schema object over two modules. `auth-schema.ts` is regenerated from the
+ * Better Auth config and `schema.ts` is written by hand, but they are one
+ * database — and Better Auth's Drizzle adapter has to find `user`, `session`,
+ * `account` and `verification` in whatever object it is handed.
+ */
+const schema = { ...ledgerSchema, ...authSchema }
 
 export type Db = NodePgDatabase<typeof schema>
 

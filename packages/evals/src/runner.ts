@@ -13,6 +13,7 @@ import {
   commitImport,
   createRegistry,
   DEV_OWNER_ID,
+  ensureOwnerUser,
   ensureSeedAccounts,
   generateSeedData,
   getDb,
@@ -86,6 +87,9 @@ export async function resetAndSeed(): Promise<void> {
   await getDb().execute(
     sql`truncate table trace_events, trace_runs, postings, transactions, import_batches, budgets, rules, memories, accounts restart identity cascade`,
   )
+  // owner_id references user(id), and the truncate above does not touch the
+  // principal table — but a fresh database has never had one.
+  await ensureOwnerUser(DEV_OWNER_ID)
   await ensureSeedAccounts(DEV_OWNER_ID)
   const { preview, resolved } = await planImport(
     DEV_OWNER_ID,

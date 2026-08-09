@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm'
 import { adminDb } from './db'
 import type { OwnerId } from './owner'
+import { ensureOwnerUser } from './repo/users'
 import {
   accounts,
   budgets,
@@ -26,9 +27,15 @@ import {
  * and it should work regardless of whether the RLS policies are in place yet.
  * Order matters — children before parents, since owner_id carries no cascade of
  * its own.
+ *
+ * It also creates the owner's `user` row, because `owner_id` references it: a
+ * suite that invents an owner uuid has invented a principal, and the foreign
+ * key wants one to exist. Setup and teardown are one call so that no suite can
+ * do half of it.
  */
 export async function resetOwner(owner: OwnerId): Promise<void> {
   const db = adminDb()
+  await ensureOwnerUser(owner)
   await db.delete(traceEvents).where(eq(traceEvents.ownerId, owner))
   await db.delete(traceRuns).where(eq(traceRuns.ownerId, owner))
   await db.delete(postings).where(eq(postings.ownerId, owner))
