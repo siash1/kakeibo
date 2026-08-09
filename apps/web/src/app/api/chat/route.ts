@@ -1,5 +1,11 @@
 import { ContextManager, createAdapter, env, loadEnv, runTurn } from '@kakeibo/core'
-import { createRegistry, DbMemoryStore, DbTracer, KNOWN_CATEGORIES } from '@kakeibo/ledger'
+import {
+  createRegistry,
+  DbMemoryStore,
+  DbTracer,
+  DEV_OWNER_ID,
+  KNOWN_CATEGORIES,
+} from '@kakeibo/ledger'
 import { awaitConfirmation, getHistory, setHistory } from '@/lib/session'
 
 /**
@@ -19,9 +25,12 @@ export const maxDuration = 300
 
 loadEnv()
 
-const registry = createRegistry()
-const tracer = new DbTracer()
-const memory = new DbMemoryStore()
+// One fixed owner until Plan B introduces sessions; this is the single line
+// each surface has to change then.
+const owner = DEV_OWNER_ID
+const registry = createRegistry(owner)
+const tracer = new DbTracer(owner)
+const memory = new DbMemoryStore(owner)
 const contextManager = new ContextManager()
 
 function describeCause(error: unknown): string {

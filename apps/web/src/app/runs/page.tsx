@@ -1,5 +1,5 @@
 import { formatUsd } from '@kakeibo/core'
-import { cacheStats, listRuns } from '@kakeibo/ledger'
+import { cacheStats, DEV_OWNER_ID, listRuns } from '@kakeibo/ledger'
 import Link from 'next/link'
 import { Badge, Card, EmptyState, Stat, statusTone } from '@/components/ui'
 
@@ -12,7 +12,7 @@ import { Badge, Card, EmptyState, Stat, statusTone } from '@/components/ui'
 export const dynamic = 'force-dynamic'
 
 export default async function RunsPage() {
-  const [runs, cache] = await Promise.all([listRuns(100), cacheStats()])
+  const [runs, cache] = await Promise.all([listRuns(DEV_OWNER_ID, 100), cacheStats(DEV_OWNER_ID)])
 
   return (
     <div className="space-y-5">
