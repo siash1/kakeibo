@@ -38,9 +38,9 @@ command. Nothing here is an estimate.
 | Median / p95 turn latency | **15.2 s** / **23.5 s** | `pnpm eval` |
 | Median cost per eval task | **$0.0105** (list price) | `pnpm eval` |
 | Context estimate error vs `countTokens` | **3.2% mean absolute** | `pnpm metrics` |
-| Tests | **109** across 9 files, no API key and no network | `pnpm test` |
+| Tests | **183** across 25 files, plus the isolation suite a second time with RLS bypassed; no API key and no network | `pnpm test` |
 | Tools | 12 | `pnpm cli` then `/help` |
-| Core loop | **375 lines** of code (`packages/core/src/loop.ts`, 472 with comments) | `pnpm metrics` |
+| Core loop | **496 lines** of code (`packages/core/src/loop.ts`, 639 with comments) | `pnpm metrics` |
 
 Cost figures are list-price estimates from `packages/core/src/pricing.ts`, read
 from Google's published Vertex pricing. They are useful as *relative* numbers —
@@ -71,9 +71,14 @@ of someone else's ledger. `pnpm db:up` creates the role locally.
 It probes each role's candidate chain against the account you actually have and
 prints the `.env` lines to paste.
 
-**Auth.** `GEMINI_AUTH=vertex` (default) uses application-default credentials —
-`gcloud auth application-default login`. `GEMINI_AUTH=apikey` uses an AI Studio
-key. Both paths are supported by the same adapter and both are tested.
+**Provider auth.** `GEMINI_AUTH=vertex` (default) uses application-default
+credentials — `gcloud auth application-default login`. `GEMINI_AUTH=apikey` uses
+an AI Studio key. Both paths are supported by the same adapter and both are
+tested.
+
+**Visitor auth.** Set `BETTER_AUTH_SECRET` (`openssl rand -base64 32`). Google
+OAuth is optional: email/password and anonymous sign-in need no external setup,
+and the sign-in UI hides the Google button while `GOOGLE_CLIENT_ID` is empty.
 
 **Docker.** `pnpm db:up` prefers `docker compose` and falls back to a local
 Postgres cluster in `.pgdata/` when Docker is not installed, so `DATABASE_URL`
@@ -122,6 +127,72 @@ the number of `functionResponse` parts differs from the number of
 `functionCall` parts it is answering — splitting them across two turns is a hard
 400. It also keeps the model willing to emit parallel calls at all, since it
 sees them answered as a batch.
+
+---
+
+## The loop can stop halfway and be picked up by a different process
+
+This is the part of the codebase I would point at first.
+
+The confirm-before-write gate used to be a callback the loop awaited. That is
+the obvious design and it works fine when the human is in the same process — the
+CLI's readline prompt, an eval script. It cannot work when the human is a
+browser on the far side of a second HTTP request: on serverless, `/api/chat` and
+`/api/confirm` are different function invocations with no shared memory to await
+across. The symptom is not subtle and it is not local: the card renders, you
+click allow, and the first request sits there until it times out.
+
+So `runTurn` takes a **policy** rather than a callback:
+
+```ts
+type ConfirmPolicy =
+  | { mode: 'inline'; confirm: ConfirmFn }  // the CLI
+  | { mode: 'auto-allow' }                  // MCP with ALLOW_WRITES=1
+  | { mode: 'auto-deny' }                   // evals, the injection suite
+  | { mode: 'suspend' }                     // the web
+```
+
+Under `suspend`, step (g) changes. When the batch contains a write the loop
+executes the **read-tier** calls, returns `status: 'suspended'` with everything
+needed to continue, and appends no results message. The caller writes that to
+`suspended_turns`; `POST /api/confirm` reads it back, runs the approved writes,
+emits a refusal for the rest, reassembles all the results into one message in
+the model's original call order, and continues from step (h) — streaming the
+rest of the turn on *its own* response.
+
+Three things about it are easy to get wrong and each one is a test:
+
+**All writes in a batch suspend together.** The provider requires response count
+to equal call count, so a batch cannot be answered piecemeal — you cannot pause
+on one write while answering another call beside it. The reads' results are
+carried across rather than re-run, which also stops the data shifting underneath
+a decision a human is still making. Getting this wrong produces a hard 400 that
+only appears when the model happens to emit a mixed batch, so the test uses a
+scripted adapter that emits exactly that shape.
+
+**The paused turn carries its own spend.** `usage` and `cost_usd_est` go into
+the suspended state and seed the resumed turn's totals. Starting them at zero
+would hide the model calls that led to the confirmation from both the trace and
+the daily budget cap — and turns involving a confirmation are the expensive
+ones, so the cap would undercount exactly the conversations that cost the most.
+
+**It stays one run.** `Tracer.resumeRun` reopens the existing `trace_runs` row
+and continues its event sequence instead of starting a second. Otherwise the
+trace viewer shows half a conversation twice and the per-visitor quota charges
+two messages for one — which would make "ask for something that needs approval"
+the cheapest way to burn a quota.
+
+All three are asserted in `pnpm test` against a scripted adapter and a real
+Postgres: the mixed batch returns its reads' results and only its writes as
+pending, the resumed turn's `usage.inputTokens` is strictly greater than the
+suspended state's, and `listRuns` finds one run whose event sequence continues
+`[0, 1]` rather than restarting.
+
+There is one more that only bites in production. The suspended state round-trips
+through `jsonb`, and Gemini 3.x hangs an opaque `thoughtSignature` off every
+`functionCall` part — so a persistence layer that helpfully normalises the
+message shape breaks resume on tool turns only, after a confirmation only, and
+never in a test that does not look for it. `conversations.test.ts` looks for it.
 
 ---
 
@@ -233,8 +304,8 @@ narrow subset — no `$ref`, no `additionalProperties`, no `oneOf`/`allOf` — s
 ## Guardrails
 
 **Tiers.** Every tool declares `read` or `write`. Read auto-executes. Write
-pauses the loop for a human: CLI prompts y/n, web emits an SSE `confirm_request`
-and blocks on a promise resolved by `POST /api/confirm`, MCP simply does not
+pauses the loop for a human: the CLI prompts y/n inline, the web *suspends the
+turn* and resumes it from `POST /api/confirm` (see above), MCP simply does not
 expose write tools unless started with `ALLOW_WRITES=1`, and evals script the
 answer per task.
 
@@ -322,6 +393,67 @@ keys derived from the row. 352 transactions across six months with salary,
 subscriptions, rent, noise, three planted anomalies (a 10× grocery bill, a
 duplicate charge, a refund), the six hostile descriptions, and ~8% of rows
 deliberately uncategorised. `data/seed/labels.json` is the eval oracle.
+
+---
+
+## One ledger per visitor, proven twice
+
+Every visitor is a Better Auth user from their first request. Anonymous ones are
+simply users who have not attached credentials yet, which collapses two
+principal types into one and makes `owner_id` on a ledger row always `user.id`.
+Signing in repoints the anonymous ledger onto the new account in a single
+transaction — it has to be single, because the anonymous plugin deletes the
+anonymous user the moment its hook returns and `owner_id` cascades from it.
+
+Isolation has **two independent mechanisms**, because showing one visitor
+another's finances is the worst thing this system can do.
+
+1. **Explicit scoping.** Every repository function takes `ownerId` as its first
+   parameter — a branded type, not a bare string, so `f(accountId, ownerId)`
+   fails to compile. No implicit context, no AsyncLocalStorage: an explicit
+   parameter is visible at every call site.
+2. **Row-level security.** Every owner-scoped table has a policy reading
+   `current_setting('app.owner_id')`, and the application connects as a role
+   that does not own the tables. A forgotten `where owner_id = ...` therefore
+   returns **zero rows**, not someone else's ledger. `withOwner` uses `SET
+   LOCAL`, not `SET`: LOCAL is transaction-scoped, so a pooled connection handed
+   to the next request cannot inherit the previous request's tenant.
+
+The isolation suite **runs twice** and both passes matter, which is the part
+worth stealing. The normal pass has RLS enforcing. The second
+(`pnpm test:isolation:app`) clears `APP_DATABASE_URL` so the suite connects as
+the owning role and RLS is bypassed — and *that* is the only pass that tests the
+application's own scoping. Verified by mutation: delete the owner filter from
+`searchTransactions` and the first pass stays completely green, because RLS
+silently covers the mistake. Only the second fails.
+
+---
+
+## Not spending more than the budget
+
+The site runs on one personal card, so the ceiling is a real constraint rather
+than a policy statement. Four layers, cheapest first, all computed from tables
+that already exist — `trace_runs` records owner and cost per turn, so there are
+no rollup tables to invalidate:
+
+| Layer | Default | Why that number |
+| --- | --- | --- |
+| Per-owner daily messages | 8 anonymous / 25 signed-in | Signing in is the upgrade path, so it has to change the answer |
+| Per-address daily messages | 20 | Deliberately *higher* than the anonymous quota: offices and mobile carriers put many genuine visitors behind one address, and a cap of 8 would let the first lock out the rest |
+| Global daily budget | $0.667 | $20/month at a measured $0.0045 per cached web turn (`pnpm cache:report`) ≈ 148 turns/day |
+| Turnstile on "start chatting" | — | Plan C |
+
+The address key is `sha256(ip + salt + date)`, so no raw address is stored and
+yesterday's keys cannot be correlated with today's — it can count a visitor
+within a day but not follow them across days. Checking and charging are one
+call, because a caller who forgets to charge has silently granted an unlimited
+quota and nothing fails.
+
+When a limit trips, `/api/chat` returns 503 with a machine-readable `reason`
+(`owner_quota` | `ip_quota` | `daily_cap` | `blocked`) and the UI says which,
+rather than showing a generic error. A **resume** is never refused for the
+message quota: it was charged when the turn started, and a turn nobody can
+finish leaves a write dangling with no way to answer for it.
 
 ---
 
@@ -447,7 +579,7 @@ packages/ledger    Drizzle schema, double-entry repositories, all 12 tool implem
 packages/mcp       MCP stdio server over the same registry
 packages/evals     harness, golden tasks, judge, report generator, injection suite
 apps/cli           readline chat with streaming and a y/n confirm gate
-apps/web           Next.js: chat, trace viewer, evals report
+apps/web           Next.js: auth, chat, trace viewer, evals report
 ```
 
 Dependency direction is one-way: `ledger` → `core`; `mcp`, `evals` and the apps
@@ -455,7 +587,8 @@ depend on both.
 
 ## Not built, on purpose
 
-No accounts or multi-tenancy — single user, local. No PDF parsing. No live bank
+No bring-your-own-key — one code path, everyone uses the owner's. No paid
+tiers. No PDF parsing. No live bank
 connections or live FX. Only one live LLM provider: the `ProviderAdapter`
 interface is the seam that makes a Claude or OpenAI adapter a drop-in, and
 writing one is a day's work, but shipping an untested second provider to claim
