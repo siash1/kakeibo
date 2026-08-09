@@ -69,7 +69,7 @@ not to be re-opened:
 | Machinery on `/chat` | **A ledger margin rail** — answer as prose, tool calls and cost posting beside it |
 | `/chat` empty state | **A ruled question list** of real questions in the book's voice |
 
-**What the branch contains**, across four commits:
+**What the branch contains** (`git log main..ui-overhaul` for the commits):
 
 - `apps/web/src/app/globals.css` — two palettes in one file. A `paper`/`sumi`
   ramp at hue ~85 for the product genre, the incumbent cool `ink` ramp kept
