@@ -60,6 +60,13 @@ pnpm cli                      # talk to it
 pnpm dev                      # or use the web UI on :3000
 ```
 
+**Two database roles.** `DATABASE_URL` owns the tables and is used by
+migrations, seeding and evals, which must write rows for any owner.
+`APP_DATABASE_URL` connects as `app_user`, which does not own the tables and is
+therefore subject to row-level security — that is the connection the application
+uses, and the reason a forgotten `where owner_id = ...` returns nothing instead
+of someone else's ledger. `pnpm db:up` creates the role locally.
+
 `pnpm check:providers` exists because model IDs move faster than any document.
 It probes each role's candidate chain against the account you actually have and
 prints the `.env` lines to paste.

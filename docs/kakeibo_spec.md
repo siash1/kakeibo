@@ -46,7 +46,11 @@ It is a **portfolio project** whose real deliverable is demonstrating agent inte
 
 ## 3. Non-goals (do not build these)
 
-- No user accounts, auth, or multi-tenancy — single-user local app.
+- ~~No user accounts, auth, or multi-tenancy — single-user local app.~~
+  **Superseded 2026-08-09.** kakeibo is going public; accounts and
+  multi-tenancy are now in scope. See
+  `docs/superpowers/specs/2026-08-09-public-launch-design.md`. Tenant isolation
+  is explicit `ownerId` scoping in the repository layer plus Postgres RLS.
 - No PDF statement parsing — CSV only.
 - No live bank connections (Plaid etc.) or live FX rates — static rates file.
 - No mobile app. No deployment complexity beyond one Docker host.
