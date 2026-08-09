@@ -9,6 +9,7 @@ import {
 import { requestGeo } from '@/lib/geo'
 import { requestIpHash, resolveOwner } from '@/lib/owner'
 import { agentDependencies, completeTurn, quotaRefusal, sseResponse } from '@/lib/turn'
+import { verifyTurnstile } from '@/lib/turnstile'
 
 /**
  * POST /api/chat -> Server-Sent Events (spec 13).
@@ -29,9 +30,27 @@ export const maxDuration = 300
 loadEnv()
 
 export async function POST(request: Request): Promise<Response> {
-  const body = (await request.json()) as { message?: string; conversationId?: string }
+  const body = (await request.json()) as {
+    message?: string
+    conversationId?: string
+    turnstileToken?: string
+  }
   const message = body.message?.trim()
   if (!message) return Response.json({ error: 'message is required' }, { status: 400 })
+
+  // Before the owner is resolved and long before a model is called: this layer
+  // exists to stop automated traffic from spending the budget at all, and
+  // resolving an owner first would mint an anonymous user per bot request.
+  //
+  // Cloudflare wants the address rather than the salted hash the quota layer
+  // stores, so this reads the header directly. Leftmost entry, same as
+  // requestIpHash: the rest are proxies.
+  const address =
+    request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
+    request.headers.get('x-real-ip')?.trim()
+  if (!(await verifyTurnstile(body.turnstileToken, address ?? undefined))) {
+    return Response.json({ error: 'Verification failed. Reload and try again.' }, { status: 403 })
+  }
 
   const { owner, isAnonymous, setCookie } = await resolveOwner(request)
 
