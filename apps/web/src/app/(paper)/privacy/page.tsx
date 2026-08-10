@@ -67,7 +67,13 @@ export default function PrivacyPage() {
           <li className="border-b border-rule py-2.5">
             An approximate city-level location derived from your request&rsquo;s IP address, for
             operational analytics. No browser location prompt is ever shown, and nothing about the
-            site behaves differently because of it.
+            site behaves differently because of it. The lookup runs on this server against a
+            database on its own disk — your address is not sent to a geolocation service, or to
+            anyone. The database is{' '}
+            <a href="https://db-ip.com" className="underline">
+              DB-IP
+            </a>
+            &rsquo;s free city file, used under CC BY 4.0.
           </li>
           <li className="border-b border-rule py-2.5">
             A salted hash of your IP address, used to count messages per day against the

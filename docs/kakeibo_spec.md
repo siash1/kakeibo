@@ -519,6 +519,10 @@ TURNSTILE_SITE_KEY=
 TURNSTILE_SECRET_KEY=
 NEXT_PUBLIC_TURNSTILE_SITE_KEY=
 
+# Local MMDB city database (Plan D, self-hosted deploy). Empty disables the
+# lookup; the Vercel edge headers take precedence when they exist.
+GEOIP_DB_PATH=
+
 # Deploy (Plan D). Vercel sends this as a bearer token on every cron invocation;
 # without it the reaper endpoint is an unauthenticated route that deletes rows.
 CRON_SECRET=

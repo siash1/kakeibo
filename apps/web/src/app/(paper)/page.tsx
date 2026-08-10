@@ -118,7 +118,14 @@ export default function LandingPage() {
   return (
     <div>
       {/* ---- the statement head ------------------------------------------ */}
-      <header className="grid gap-x-10 gap-y-8 border-b border-sumi-900 pb-9 lg:grid-cols-[minmax(0,1fr)_13.5rem]">
+      {/*
+       * No rule closing the header. The first section opens with its own heavy
+       * sumi rule 56px below, and the two together were a doubled division with
+       * nothing between them — the same thing /privacy and /terms had. One rule
+       * per division, and the first one on every paper page belongs to the first
+       * section.
+       */}
+      <header className="grid gap-x-10 gap-y-8 pb-2 lg:grid-cols-[minmax(0,1fr)_13.5rem]">
         {/*
          * No wordmark here. The nav carries it two centimetres above, and a
          * statement that reprints its own letterhead directly under the
