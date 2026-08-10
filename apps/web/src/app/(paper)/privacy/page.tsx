@@ -40,7 +40,7 @@ export default function PrivacyPage() {
           A copy of a 352-transaction synthetic ledger, generated for this project and belonging to
           nobody. It is created the first time you ask the agent something or open the dashboard,
           not when you load a page, so visiting costs nothing. You are signed in anonymously to hold
-          it — there are no accounts here and no way to make one.
+          it. There are no accounts here and no way to make one.
         </p>
       </Section>
 
@@ -61,14 +61,14 @@ export default function PrivacyPage() {
             second one.
           </li>
           <li className="border-b border-rule py-2.5">
-            A trace of every model call and tool call in that conversation — what was asked, which
+            A trace of every model call and tool call in that conversation: what was asked, which
             tools ran, what they returned, and what it cost.
           </li>
           <li className="border-b border-rule py-2.5">
             An approximate city-level location derived from your request&rsquo;s IP address, for
             operational analytics. No browser location prompt is ever shown, and nothing about the
             site behaves differently because of it. The lookup runs on this server against a
-            database on its own disk — your address is not sent to a geolocation service, or to
+            database on its own disk. Your address is not sent to a geolocation service, or to
             anyone. The database is{' '}
             <a href="https://db-ip.com" className="underline">
               DB-IP
@@ -85,7 +85,7 @@ export default function PrivacyPage() {
       <Section title="Who can read it">
         <p className="text-[15px] leading-[1.7] text-sumi-900">
           The operator can. Traces contain the arguments and results of every tool call, which means
-          a trace of your conversation contains the contents of your ledger — the merchants, the
+          a trace of your conversation contains the contents of your ledger: the merchants, the
           amounts, the dates. An operator reading a trace to debug the agent is reading your data.
           That is a real consequence of building the thing this way, and it is stated here rather
           than buried in the architecture.
@@ -98,7 +98,7 @@ export default function PrivacyPage() {
 
       <Section title="If you import a real statement">
         <p className="text-[15px] leading-[1.7] text-sumi-900">
-          You may, and the raw CSV is never written to disk or to the database — it is parsed in
+          You may, and the raw CSV is never written to disk or to the database. It is parsed in
           memory and only the derived rows are stored. Those rows are deleted with everything else
           after 24 hours. Given the paragraph above about traces, importing a real statement is not
           advised.

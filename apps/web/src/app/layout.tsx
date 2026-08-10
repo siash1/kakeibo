@@ -20,7 +20,7 @@ import './globals.css'
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.BETTER_AUTH_URL ?? 'http://localhost:3000'),
   title: {
-    default: 'kakeibo — a finance agent that shows its working',
+    default: 'kakeibo: a finance agent that shows its working',
     template: '%s · kakeibo',
   },
   description:
@@ -29,13 +29,13 @@ export const metadata: Metadata = {
   openGraph: {
     type: 'website',
     siteName: 'kakeibo',
-    title: 'kakeibo — a finance agent that shows its working',
+    title: 'kakeibo: a finance agent that shows its working',
     description:
       'Twelve tools over a double-entry ledger, a hand-written loop, and a gate that stops before anything is written. Every answer prints what it cost.',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'kakeibo — a finance agent that shows its working',
+    title: 'kakeibo: a finance agent that shows its working',
     description:
       'Twelve tools over a double-entry ledger, a hand-written loop, and a gate that stops before anything is written. Every answer prints what it cost.',
   },

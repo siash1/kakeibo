@@ -446,7 +446,7 @@ function Opening({ onPick, ready }: { onPick: (text: string) => void; ready: boo
         Ask the ledger.
       </h1>
       <p className="mt-5 max-w-[62ch] text-[15px] leading-[1.65] text-sumi-600">
-        352 synthetic transactions, January to June 2025 — generated, not anyone's real spending.
+        352 synthetic transactions, January to June 2025. Generated, not anyone's real spending.
         Every answer is worked out live: the agent chooses its own tools, and each one it calls is
         posted in the margin beside the answer.
       </p>
@@ -479,8 +479,8 @@ function Opening({ onPick, ready }: { onPick: (text: string) => void; ready: boo
       </div>
 
       <p className="mt-5 max-w-[62ch] text-[13px] leading-relaxed text-sumi-500">
-        The last one writes. Anything that changes the ledger stops the turn and asks you first —
-        the gate is in the loop, not in the prompt.
+        The last one writes. Anything that changes the ledger stops the turn and asks you first. The
+        gate is in the loop, not in the prompt.
       </p>
     </div>
   )
@@ -534,7 +534,7 @@ function Entry({
         {quiet && !pending && held.length > 0 ? (
           <p className="max-w-[68ch] text-[15px] leading-[1.7] text-sumi-600">
             The turn stopped here. {held.length === 1 ? 'A write is' : `${held.length} writes are`}{' '}
-            waiting on you below — nothing has been written yet, and the rest of the answer arrives
+            waiting on you below. Nothing has been written yet, and the rest of the answer arrives
             once you decide.
           </p>
         ) : null}

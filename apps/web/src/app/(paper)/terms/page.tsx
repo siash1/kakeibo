@@ -53,7 +53,7 @@ export default function TermsPage() {
           <Link href="/privacy" className="underline">
             The privacy page
           </Link>{' '}
-          describes what is stored and who can read it — including the part where the operator can
+          describes what is stored and who can read it, including the part where the operator can
           see your ledger contents in a diagnostic trace. Please read it before importing anything
           real.
         </p>

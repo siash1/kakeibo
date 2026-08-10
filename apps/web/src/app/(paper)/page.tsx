@@ -165,8 +165,8 @@ export default function LandingPage() {
           <MarginHeading>Provenance</MarginHeading>
           <dl className="mt-2 border-t border-rule-strong">
             <MetaLine label="figures from" value={runDate ?? 'no run recorded'} />
-            <MetaLine label="agent" value={report?.model ?? '—'} />
-            <MetaLine label="judge" value={report?.judgeModel ?? '—'} />
+            <MetaLine label="agent" value={report?.model ?? 'not recorded'} />
+            <MetaLine label="judge" value={report?.judgeModel ?? 'not recorded'} />
           </dl>
           <p className="mt-3 leading-relaxed text-sumi-600">
             Every number on this page comes out of{' '}
@@ -193,7 +193,7 @@ export default function LandingPage() {
           />
           <LineItem
             entry="Of those, writes that stop for a human"
-            detail="A batch containing a write suspends the turn to the database and returns what it was about to do. The gate is in the loop, not in the prompt — a model that decided to ignore it still could not reach the write."
+            detail="A batch containing a write suspends the turn to the database and returns what it was about to do. The gate is in the loop, not in the prompt, so a model that decided to ignore it still could not reach the write."
             figure={String(writeTools.length)}
             note="write tier"
           />
@@ -201,14 +201,16 @@ export default function LandingPage() {
             <>
               <LineItem
                 entry="Golden tasks passed, last run"
-                detail={`${Object.keys(report.byClass).length} classes — reports, categorisation, budgets, recurring, anomalies, memory, multi-tool, currency, refusal and the rest. Deterministic checks gate the verdict; the judge only refines.`}
+                detail={`${Object.keys(report.byClass).length} classes: reports, categorisation, budgets, recurring, anomalies, memory, multi-tool, currency, refusal and the rest. Deterministic checks gate the verdict; the judge only refines.`}
                 figure={`${report.passed}/${report.taskCount}`}
                 note={`${report.passRate}%`}
               />
               <LineItem
                 entry="Prompt-injection attempts blocked"
                 detail="Statement descriptions are attacker-controlled text. The suite plants instructions in them and checks that none of them moved money or changed a category."
-                figure={report.injectionBlockRate === null ? '—' : `${report.injectionBlockRate}%`}
+                figure={
+                  report.injectionBlockRate === null ? 'not run' : `${report.injectionBlockRate}%`
+                }
                 note="blocked"
               />
               <LineItem
@@ -225,7 +227,7 @@ export default function LandingPage() {
               />
               <LineItem
                 entry="Median latency per task"
-                detail={`Agent time only — the reset-and-reseed each task starts from is not charged to it. p95 was ${(report.p95LatencyMs / 1000).toFixed(1)}s.`}
+                detail={`Agent time only. The reset-and-reseed each task starts from is not charged to it. p95 was ${(report.p95LatencyMs / 1000).toFixed(1)}s.`}
                 figure={`${(report.medianLatencyMs / 1000).toFixed(1)}s`}
                 note="median"
               />
@@ -250,7 +252,7 @@ export default function LandingPage() {
                   </div>
                   <div className="mt-1 max-w-[64ch] text-[13px] leading-relaxed text-sumi-600">
                     Every figure above, produced end to end, on {report.taskCount} tasks. Not a sum
-                    of the lines above it — they measure different things — but the total this
+                    of the lines above it, since they measure different things, but the total this
                     statement is drawn from.
                   </div>
                 </div>
@@ -302,7 +304,7 @@ export default function LandingPage() {
                       <span className="text-sumi-900">{exchange.gate.detail}</span>.
                     </p>
                     <p className="mt-2 text-[12px] leading-relaxed text-sumi-500">
-                      The slip the visitor actually signs is not reproduced here — the report stores
+                      The slip the visitor actually signs is not reproduced here. The report stores
                       that the gate fired and how it was answered, not the wording it showed, and
                       inventing that screen is the one thing this page must not do.{' '}
                       <Link href="/chat" className="text-sumi-800">
@@ -349,7 +351,7 @@ export default function LandingPage() {
       <section className="mt-16">
         <SectionRule
           title="The twelve"
-          note="Read from the registry at render time. Adding a tool to one file puts it in the agent loop, the MCP server and the eval harness at once — this list cannot fall out of date."
+          note="Read from the registry at render time. Adding a tool to one file puts it in the agent loop, the MCP server and the eval harness at once, so this list cannot fall out of date."
         />
 
         <div className="mt-6 border-t border-rule-strong">
@@ -405,9 +407,9 @@ export default function LandingPage() {
               about the limit is.
             </p>
             <p className="text-[14px] text-sumi-600">
-              Your ledger is a synthetic 352-transaction copy made the first time you ask something
-              — generated, not anyone's real spending. Importing a real statement works and is
-              deleted after twenty-four hours; the raw CSV is never stored.
+              Your ledger is a synthetic 352-transaction copy made the first time you ask something.
+              Generated, not anyone's real spending. Importing a real statement works and is deleted
+              after twenty-four hours; the raw CSV is never stored.
             </p>
           </div>
 

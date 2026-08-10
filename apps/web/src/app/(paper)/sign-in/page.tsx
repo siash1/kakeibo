@@ -54,8 +54,8 @@ export default function SignInPage() {
         Sign in
       </h1>
       <p className="mt-3 text-[13px] leading-[1.5] text-sumi-600">
-        For the operator. kakeibo has no accounts — everyone else uses it anonymously, and nothing
-        on the site links here.
+        For the operator. kakeibo has no accounts. Everyone else uses it anonymously, and nothing on
+        the site links here.
       </p>
 
       <form onSubmit={submit} className="mt-12 border-t border-sumi-900 pt-8">

@@ -42,7 +42,7 @@ export function Nav({ showAdmin = false }: { showAdmin?: boolean }) {
        * link that sits last.
        */}
       <div className="mx-auto flex h-14 max-w-6xl items-center gap-4 px-6 sm:gap-7">
-        <Link href="/" className="shrink-0 no-underline" aria-label="kakeibo — home">
+        <Link href="/" className="shrink-0 no-underline" aria-label="kakeibo, home">
           <Wordmark className="text-[15px]" />
         </Link>
         <nav className="-mx-1 flex min-w-0 items-center gap-1 overflow-x-auto px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">

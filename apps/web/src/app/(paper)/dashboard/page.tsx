@@ -164,7 +164,7 @@ export default async function DashboardPage({
         <Figure label="Spent" value={formatMinor(spent)} />
         <Figure
           label="Largest category"
-          value={largest ? formatMinor(largest.totalMinor) : '—'}
+          value={largest ? formatMinor(largest.totalMinor) : 'none'}
           note={largest?.group}
         />
         <Figure
@@ -205,7 +205,7 @@ export default async function DashboardPage({
         {withBudget.length === 0 ? (
           <Empty
             title="No budgets set for this month."
-            hint="Ask the agent to set one — it will show you what will change before it writes."
+            hint="Ask the agent to set one. It will show you what will change before it writes."
           />
         ) : (
           <div className="border-t border-rule-strong">
@@ -224,7 +224,7 @@ export default async function DashboardPage({
 
       <Section
         title="Recurring"
-        note="Grouped by merchant with reference numbers stripped, so NETFLIX.COM 4429183 and NETFLIX.COM 5510022 count as one subscription rather than two. Money arriving on a cadence — salary, interest — is recurring too, and shows here as a negative."
+        note="Grouped by merchant with reference numbers stripped, so NETFLIX.COM 4429183 and NETFLIX.COM 5510022 count as one subscription rather than two. Money arriving on a cadence, such as salary or interest, is recurring too, and shows here as a negative."
       >
         {recurring.length === 0 ? (
           <Empty
@@ -272,7 +272,7 @@ export default async function DashboardPage({
         {anomalies.length === 0 ? (
           <Empty
             title="Nothing unusual this month."
-            hint="April has the planted ones — walk back and the detector has something to find."
+            hint="April has the planted ones. Walk back and the detector has something to find."
           />
         ) : (
           <div className="border-t border-rule-strong">

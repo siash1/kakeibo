@@ -442,7 +442,7 @@ export function ConfirmSlip({
         </div>
       ) : (
         <p className="mt-4 text-[13px] text-sumi-600">
-          {state === 'allowed' ? 'Allowed — the turn resumed.' : 'Declined — nothing was written.'}
+          {state === 'allowed' ? 'Allowed. The turn resumed.' : 'Declined. Nothing was written.'}
         </p>
       )}
     </section>
