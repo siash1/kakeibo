@@ -13,9 +13,13 @@ phase. **Plans A, B and C, the whole of Phase 2, and now Plan D are all
 written and built.** Plans A–C and Phase 2 are on `main`; **Plan D is built and
 green on the `plan-d` branch and has not been merged.**
 
-What is left is not code. It is the deploy itself, which needs accounts only
-the owner can create — Neon, Vercel, Cloudflare — and follows
-**`docs/deploy.md`**, whose two orderings are the load-bearing part of it.
+**The site is live at https://kakeibo.co.in.** It was deployed on 2026-08-10 to
+a Hetzner box rather than to Vercel + Neon — see **`docs/deploy-hetzner.md`**,
+which is the runbook that was actually executed. `docs/deploy.md` remains the
+Vercel route and is untested.
+
+What is left is one decision: `plan-d` has never been merged to `main` or
+pushed. The running site and that branch are the only two copies of this work.
 
 **Read first, in this order:**
 
@@ -35,8 +39,9 @@ the owner can create — Neon, Vercel, Cloudflare — and follows
    the end of Phase 2. PRODUCT.md is the thing to argue with, not around;
    DESIGN.md describes what shipped, so if it and the code disagree, the code
    is the bug or the doc is stale and one of them gets fixed.
-5. `docs/deploy.md` — **the runbook, and the work that is next.** Two orderings
-   and a table of variables. Written by Plan D, never yet executed.
+5. `docs/deploy-hetzner.md` — **the runbook that was actually executed**, and
+   the description of the machine the site runs on. `docs/deploy.md` is the
+   Vercel + Neon alternative, written by Plan D and never run.
 6. `docs/superpowers/plans/2026-08-10-public-launch-surfaces-and-deploy.md` —
    Plan D, now built. Its "Out of scope" block is still the record of what the
    owner cut. Four of its task briefs were wrong in ways worth knowing about;
@@ -99,9 +104,35 @@ Four things Phase 2 fixed that were not UI:
 The four owner decisions from the Phase 2 direction round are in the decided
 table at the bottom. The no-accent one is still the load-bearing one.
 
+### The live deployment (2026-08-10)
+
+`root@89.167.44.127`, a shared Hetzner box that also runs an unrelated project
+(`japcar`) on :3001. kakeibo is deliberately separate at every layer: its own
+directory, systemd unit, Postgres container and volume. Nothing is shared.
+
+| | |
+| --- | --- |
+| App | `/opt/kakeibo/app`, `kakeibo.service`, `pnpm start` on **:3002** |
+| Env | `/opt/kakeibo/.env` (0600), symlinked to the repo root — see below |
+| Database | `kakeibo-postgres`, **127.0.0.1:5434**, volume `kakeibo_pgdata` |
+| Proxy | Caddy, automatic TLS, `www` and `http` redirect to the apex |
+| Sweep | `kakeibo-reap.timer`, 03:17 UTC — the only thing enforcing 24h retention |
+| GeoIP | `kakeibo-geoip.timer`, monthly, DB-IP city file at `/opt/kakeibo/geoip` |
+| Gemini | `apikey` mode. Vertex needs a service account; ADC does not exist on a server |
+| Turnstile | **present in the code and deliberately unconfigured.** The owner declined it on 2026-08-10. Both keys empty means the gate is inert on the server and invisible in the browser, which is a supported state, not a broken one |
+
+Four things cost time there and are written up in `docs/deploy-hetzner.md`:
+Docker's published ports bypass ufw entirely; `tests/setup.ts` loads `.env` from
+the *repository root* and otherwise falls back to a `DATABASE_URL` pointing at
+the neighbouring project's Postgres; Caddy appends to `X-Forwarded-For` unless
+told to overwrite, which would let a visitor forge their per-IP quota bucket;
+and `NEXT_PUBLIC_TURNSTILE_SITE_KEY` is inlined at build time, so it needs a
+rebuild rather than a restart.
+
 ### Plan D — built, green, unmerged
 
-Branch `plan-d`, worktree `.worktrees/plan-d`, eleven commits on top of `main`.
+Branch `plan-d`, worktree `.worktrees/plan-d`, thirteen commits on top of
+`main`, and the exact code the live site is running.
 **The owner cut sign-up entirely on 2026-08-10**, so the scope was:
 
 | In | Out |
