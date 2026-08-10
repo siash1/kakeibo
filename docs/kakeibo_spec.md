@@ -190,7 +190,8 @@ globally unique. `"user"` is Better Auth's principal table, a reserved word in
 Postgres that must be quoted in every hand-written statement; its ids are uuids
 (`advanced.database.generateId: 'uuid'`) so `owner_id` can reference them. The
 cascade is what implements both the 24-hour anonymous reaper and "delete
-everything" on `/settings`.
+everything" — which Plan D put on `/privacy` after the owner cut `/settings`
+along with sign-up on 2026-08-10.
 
 Four more tables arrived with Plan B:
 
@@ -429,6 +430,11 @@ checks:
   *Amended 2026-08-10 (Phase 2).* The routes are now `/` landing, `/chat` the
   agent, `/dashboard`, `/evals`, `/runs` and `/runs/[id]`, plus `/admin` from
   Plan C. Design spec §7 is the authority on the set.
+
+  *Amended 2026-08-10 (Plan D).* Plus `/privacy` (which carries the
+  delete-everything control), `/terms`, and `/sign-in` — the operator's door to
+  `/admin`, linked from nowhere and carrying no sign-up form. There is no
+  `/settings`: the owner cut it, and sign-up with it, on 2026-08-10.
 - Chat transport: `POST /api/chat` → SSE events: `token` (text delta), `tool_call {name,args}`, `tool_result {name, summary}`, `confirm_request {id, tool, args}`, `turn_end {run_id, usage}`, `error`. Confirmation: UI renders an inline allow/deny card → `POST /api/confirm {id, allow}` resolves the loop's pending promise. Single-process state is fine (single user).
 - Look: clean dark UI, monospace numbers, no design heroics — but tool calls and confirm cards must look deliberate, not debug-dump. Trace viewer is a first-class page, not an afterthought (it demos "observability" in interviews).
 
@@ -505,6 +511,21 @@ RATE_LIMIT_SALT=                  # salts the per-IP key; raw addresses are neve
 # nobody — an empty allowlist that granted access would make a missing
 # environment variable an open dashboard.
 ADMIN_EMAILS=
+
+# Turnstile (Plan D). Both empty disables the check entirely, which is the
+# normal local and CI state. Set both in production. The site key is public and
+# is also exposed to the browser as NEXT_PUBLIC_TURNSTILE_SITE_KEY.
+TURNSTILE_SITE_KEY=
+TURNSTILE_SECRET_KEY=
+NEXT_PUBLIC_TURNSTILE_SITE_KEY=
+
+# Local MMDB city database (Plan D, self-hosted deploy). Empty disables the
+# lookup; the Vercel edge headers take precedence when they exist.
+GEOIP_DB_PATH=
+
+# Deploy (Plan D). Vercel sends this as a bearer token on every cron invocation;
+# without it the reaper endpoint is an unauthenticated route that deletes rows.
+CRON_SECRET=
 ```
 
 pnpm scripts: `dev` (web), `cli`, `db:up`, `db:migrate`, `db:seed`, `db:reset`,

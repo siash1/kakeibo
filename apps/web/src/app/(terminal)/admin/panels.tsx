@@ -319,7 +319,7 @@ export function Users({ users }: { users: AdminUser[] }) {
                   {row.createdAt.toLocaleDateString()}
                 </td>
                 <td className="px-3 py-2 font-mono text-ink-500">
-                  {row.lastSeenAt ? row.lastSeenAt.toLocaleString() : '—'}
+                  {row.lastSeenAt ? row.lastSeenAt.toLocaleString() : 'never'}
                 </td>
                 <td className="num px-3 py-2 text-right text-ink-300">{row.messagesToday}</td>
                 <td className="num px-3 py-2 text-right text-ink-300">

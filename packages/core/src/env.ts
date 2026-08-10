@@ -88,6 +88,30 @@ const EnvSchema = z.object({
    */
   RATE_LIMIT_SALT: z.string().default(''),
 
+  /**
+   * Turnstile (spec §5, layer 4). Both empty disables the check completely,
+   * which is the correct local and CI state: a challenge nobody can solve
+   * headlessly would make every test that posts a chat message fail for a
+   * reason unrelated to what it is testing.
+   *
+   * The site key is public by design and is also read from the browser as
+   * `NEXT_PUBLIC_TURNSTILE_SITE_KEY`; it is declared here so that every
+   * variable this repo needs is described in one schema.
+   */
+  TURNSTILE_SITE_KEY: z.string().default(''),
+  TURNSTILE_SECRET_KEY: z.string().default(''),
+
+  /**
+   * Path to an MMDB city database, for a deployment with no edge in front of it
+   * to resolve a location (spec §9.5). Empty disables the lookup, which is the
+   * local and CI state and the correct one on Vercel, where the edge headers
+   * already carry a city.
+   *
+   * The file is not in git — it is ~150 MB and refreshed monthly. See
+   * `docs/deploy-hetzner.md` for the download and its licence.
+   */
+  GEOIP_DB_PATH: z.string().default(''),
+
   /** Fixture modes (spec 8.2). RECORD writes fixtures, REPLAY reads them. */
   RECORD: boolish.default(false),
   REPLAY: boolish.default(false),

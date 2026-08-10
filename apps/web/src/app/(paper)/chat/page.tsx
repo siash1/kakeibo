@@ -13,6 +13,7 @@ import {
   TurnAccount,
 } from '@/components/exchange'
 import { Mark } from '@/components/ledger'
+import { TurnstileGate, turnstileSiteKey } from '@/components/turnstile-gate'
 
 /**
  * /chat — the agent, as a page of the account book.
@@ -130,6 +131,22 @@ export default function ChatPage() {
    * so a reload picks the thread up rather than starting a second.
    */
   const conversationId = useRef<string | undefined>(undefined)
+  /**
+   * The newest Turnstile token, and the counter that replaces it.
+   *
+   * A token is single-use, so it is cleared the moment a turn has spent it and
+   * the widget is asked for another. `ready` is what the composer waits on:
+   * with no site key configured there is no gate and nothing to wait for, which
+   * is the local and CI state.
+   */
+  const turnstileToken = useRef<string | undefined>(undefined)
+  const [turnstileGeneration, setTurnstileGeneration] = useState(0)
+  const [verified, setVerified] = useState(turnstileSiteKey === '')
+
+  const holdToken = useCallback((token: string | undefined) => {
+    turnstileToken.current = token
+    setVerified(token !== undefined)
+  }, [])
 
   /**
    * Follows the stream only while the reader is already at the foot of the page.
@@ -180,6 +197,12 @@ export default function ChatPage() {
       }
       if (response.status === 410) {
         note('warn', 'That confirmation had already expired. Ask again to start a fresh turn.')
+        return
+      }
+      if (response.status === 403) {
+        // The gate, not the ledger: this is the one refusal that has nothing to
+        // do with what was asked.
+        setLimited('Verification failed. Reload the page and try again.')
         return
       }
       if (!response.ok) {
@@ -318,7 +341,10 @@ export default function ChatPage() {
 
   const send = useCallback(
     async (text: string) => {
-      if (!text.trim() || busy) return
+      // `verified` guards here as well as on the button, because the opening
+      // question list calls this directly and a turn sent without a token would
+      // come back 403 for a reason the visitor cannot see.
+      if (!text.trim() || busy || !verified) return
       setBusy(true)
       setLimited(null)
       setInput('')
@@ -333,18 +359,26 @@ export default function ChatPage() {
           await fetch('/api/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message: text, conversationId: conversationId.current }),
+            body: JSON.stringify({
+              message: text,
+              conversationId: conversationId.current,
+              turnstileToken: turnstileToken.current,
+            }),
           }),
         )
       } catch (error) {
         note('danger', error instanceof Error ? error.message : String(error))
       } finally {
+        // Spent, whatever happened: Cloudflare rejects a replayed token, so the
+        // held one is dropped and the widget asked for another.
+        holdToken(undefined)
+        setTurnstileGeneration((generation) => generation + 1)
         setBusy(false)
         follow(true)
         inputRef.current?.focus()
       }
     },
-    [busy, consume, follow, note],
+    [busy, consume, follow, holdToken, note, verified],
   )
 
   return (
@@ -357,7 +391,7 @@ export default function ChatPage() {
        * line with no way to scroll it clear.
        */}
       <div className="flex-1 pb-24">
-        {messages.length === 0 ? <Opening onPick={send} /> : null}
+        {messages.length === 0 ? <Opening onPick={send} ready={verified} /> : null}
 
         {messages.map((message, index) =>
           message.role === 'user' ? (
@@ -394,22 +428,25 @@ export default function ChatPage() {
         ref={inputRef}
         value={input}
         busy={busy}
+        verified={verified}
         onChange={setInput}
         onSubmit={() => send(input)}
-      />
+      >
+        <TurnstileGate onToken={holdToken} refreshKey={turnstileGeneration} />
+      </Composer>
     </div>
   )
 }
 
 /** The index the page opens on: what the book can be asked, ruled into it. */
-function Opening({ onPick }: { onPick: (text: string) => void }) {
+function Opening({ onPick, ready }: { onPick: (text: string) => void; ready: boolean }) {
   return (
     <div className="pt-4">
       <h1 className="max-w-[16ch] font-serif text-[clamp(2rem,6vw,2.75rem)] leading-[1.08] tracking-[-0.025em]">
         Ask the ledger.
       </h1>
       <p className="mt-5 max-w-[62ch] text-[15px] leading-[1.65] text-sumi-600">
-        352 synthetic transactions, January to June 2025 — generated, not anyone's real spending.
+        352 synthetic transactions, January to June 2025. Generated, not anyone's real spending.
         Every answer is worked out live: the agent chooses its own tools, and each one it calls is
         posted in the margin beside the answer.
       </p>
@@ -420,6 +457,12 @@ function Opening({ onPick }: { onPick: (text: string) => void }) {
             key={suggestion.text}
             type="button"
             onClick={() => onPick(suggestion.text)}
+            // Inert only while a configured Turnstile gate is still working,
+            // which with an interaction-only widget is normally over before the
+            // list has been read. It carries no disabled styling for that
+            // reason: a list that greys itself out for half a second on load
+            // reads as broken.
+            disabled={!ready}
             className="group flex w-full items-baseline justify-between gap-6 border-b border-rule py-4 text-left transition-colors hover:border-sumi-900"
           >
             <span className="font-serif text-[clamp(1rem,2.6vw,1.1875rem)] leading-snug text-sumi-900">
@@ -436,8 +479,8 @@ function Opening({ onPick }: { onPick: (text: string) => void }) {
       </div>
 
       <p className="mt-5 max-w-[62ch] text-[13px] leading-relaxed text-sumi-500">
-        The last one writes. Anything that changes the ledger stops the turn and asks you first —
-        the gate is in the loop, not in the prompt.
+        The last one writes. Anything that changes the ledger stops the turn and asks you first. The
+        gate is in the loop, not in the prompt.
       </p>
     </div>
   )
@@ -491,7 +534,7 @@ function Entry({
         {quiet && !pending && held.length > 0 ? (
           <p className="max-w-[68ch] text-[15px] leading-[1.7] text-sumi-600">
             The turn stopped here. {held.length === 1 ? 'A write is' : `${held.length} writes are`}{' '}
-            waiting on you below — nothing has been written yet, and the rest of the answer arrives
+            waiting on you below. Nothing has been written yet, and the rest of the answer arrives
             once you decide.
           </p>
         ) : null}
@@ -565,17 +608,28 @@ function Composer({
   ref,
   value,
   busy,
+  verified,
   onChange,
   onSubmit,
+  children,
 }: {
   ref: React.RefObject<HTMLInputElement | null>
   value: string
   busy: boolean
+  /**
+   * False only while a configured Turnstile gate has not yet issued a token.
+   * With no gate it is true from the first render, so nothing on this page
+   * behaves differently locally or in CI.
+   */
+  verified: boolean
   onChange: (value: string) => void
   onSubmit: () => void
+  /** The Turnstile widget, which occupies no space unless it wants a click. */
+  children?: React.ReactNode
 }) {
   return (
     <div className="sticky bottom-0 -mx-6 mt-16 bg-paper-50 px-6 pb-6 pt-4">
+      {children}
       <form
         onSubmit={(event) => {
           event.preventDefault()
@@ -598,7 +652,7 @@ function Composer({
         />
         <button
           type="submit"
-          disabled={busy || !value.trim()}
+          disabled={busy || !verified || !value.trim()}
           // Disabled is a light fill with dark text rather than a dimmed dark
           // fill: paper-50 on rule-strong measures 3.4:1, which is a label you
           // have to lean in to read on the one control the page is about.

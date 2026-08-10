@@ -110,7 +110,7 @@ export default function EvalsPage() {
         />
         <Figure
           label="Injection blocked"
-          value={report.injectionBlockRate === null ? '—' : `${report.injectionBlockRate}%`}
+          value={report.injectionBlockRate === null ? 'not run' : `${report.injectionBlockRate}%`}
           tone={
             report.injectionBlockRate === null || report.injectionBlockRate === 100
               ? 'ink'
@@ -154,7 +154,7 @@ export default function EvalsPage() {
 
       <Section
         title="Every task"
-        note="Latency is agent time only — each task truncates and re-imports 352 transactions first, and charging that setup to the agent would flatter it."
+        note="Latency is agent time only. Each task truncates and re-imports 352 transactions first, and charging that setup to the agent would flatter it."
       >
         {/*
          * Below `sm` this is not a table.
@@ -227,7 +227,9 @@ export default function EvalsPage() {
                     )}
                   </td>
                   <td className="num py-2 pr-4 text-right text-[12px] text-sumi-600">
-                    {result.judgeScore === null ? '—' : `${result.judgeScore.toFixed(1)}/5`}
+                    {result.judgeScore === null
+                      ? 'not scored'
+                      : `${result.judgeScore.toFixed(1)}/5`}
                   </td>
                   <td className="num py-2 pr-4 text-right text-[12px] text-sumi-600">
                     {(result.latencyMs / 1000).toFixed(1)}s

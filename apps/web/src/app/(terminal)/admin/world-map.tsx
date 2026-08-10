@@ -81,7 +81,7 @@ export function WorldMap({ points }: { points: MapPoint[] }) {
                 className="fill-accent/25 stroke-accent"
                 strokeWidth="0.75"
               />
-              <title>{`${point.city ?? 'unknown'}, ${point.country ?? '??'} — ${point.runs} turn(s)`}</title>
+              <title>{`${point.city ?? 'unknown'}, ${point.country ?? '??'}: ${point.runs} turn(s)`}</title>
             </g>
           )
         })}
