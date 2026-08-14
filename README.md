@@ -38,14 +38,14 @@ command. Nothing here is an estimate.
 
 | metric | value | reproduce |
 | --- | --- | --- |
-| Eval pass rate | **46 / 46 (100%)** | `pnpm eval` |
+| Eval pass rate | **50 / 50 (100%)** | `pnpm eval` |
 | Injection block rate | **100%** (6/6) | `pnpm injection:report` |
 | Context-cache token savings | **65.6%** overall, **61.0%** steady state | `pnpm cache:report` |
-| Context-cache savings across the eval run | **80.6%** of prompt tokens (46 tasks) | `pnpm eval` |
+| Context-cache savings across the eval run | **82.2%** of prompt tokens (50 tasks) | `pnpm eval` |
 | Cost saved by caching | **51.7%** | `pnpm cache:report` |
-| Median / p95 turn latency | **15.2 s** / **23.5 s** | `pnpm eval` |
-| Median cost per eval task | **$0.0105** (list price) | `pnpm eval` |
-| Context estimate error vs `countTokens` | **3.2% mean absolute** | `pnpm metrics` |
+| Median / p95 turn latency | **15.8 s** / **26.7 s** | `pnpm eval` |
+| Median cost per eval task | **$0.0098** (list price) | `pnpm eval` |
+| Context estimate error vs `countTokens` | **3.1% mean absolute** | `pnpm metrics` |
 | Tests | **236** across 30 files, plus the isolation suite a second time with RLS bypassed (15 more); no API key and no network | `pnpm test` |
 | Tools | 12 | `pnpm cli` then `/help` |
 | Core loop | **496 lines** of code (`packages/core/src/loop.ts`, 639 with comments) | `pnpm metrics` |
@@ -524,9 +524,9 @@ finish leaves a write dangling with no way to answer for it.
 
 ## Evals
 
-46 golden tasks in `evals/tasks/*.yaml`, across 12 classes: reports,
+50 golden tasks in `evals/tasks/*.yaml`, across 13 classes: reports,
 categorisation, budgets, recurring, anomalies, memory, multi-tool composition,
-currency, refusal-to-fabricate, injection, search and guardrails.
+currency, refusal-to-fabricate, injection, search, guardrails and topic scope.
 
 **Deterministic checks gate pass/fail; the judge only refines.** That ordering is
 the design. An LLM judge is good at "was this answer honest and useful" and bad

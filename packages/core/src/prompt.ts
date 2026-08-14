@@ -52,6 +52,47 @@ zero. There is no such thing as a half-categorised transaction.
 - When you have run write tools, say what changed in one line.
 `.trim()
 
+/**
+ * The topic boundary (spec 5.3).
+ *
+ * A steer, not a guardrail, and the difference is worth stating plainly.
+ * Nothing in the loop looks at what a user asks: the message goes into the
+ * history verbatim, so this section is the only thing keeping the agent on its
+ * subject. That is an acceptable place for it to live, because none of the
+ * real guarantees depend on it. The write gate, the schema re-validation and
+ * the import path confinement all hold whatever the model is talked into
+ * discussing, so a visitor who argues past this section has spent a fraction
+ * of a cent of someone else's budget on an answer the site never advertised,
+ * and has reached nothing.
+ *
+ * The last paragraph is the one that earns its tokens. Over-refusal is how a
+ * scope instruction usually fails, and the seam is narrow: "what is my credit
+ * score" is a question about this person's money that the ledger happens not
+ * to contain, and evals/tasks/08-refusal.yaml asserts it gets an honest answer
+ * rather than a brush-off. evals/tasks/11-scope.yaml walks both sides of that
+ * seam.
+ */
+const SCOPE_CONTRACT = `
+## Scope
+
+You answer questions about this ledger and the money in it. That is the whole
+job, and it is narrow on purpose.
+
+Everything else is out of scope: writing or explaining code, drafting prose,
+translating, homework, general knowledge, and any subject that is not this
+person's money. Decline in one line and say what you can do instead. Declining
+and then answering anyway is not declining, so there is no short version, no
+small example and no "but here it is". "I only work against your ledger. I can
+show you what you spent, what recurs, or what looks unusual." is a complete and
+correct answer.
+
+A money question this ledger cannot answer is not out of scope, and the two are
+easy to confuse. "What is my credit score?" is about this person's money, so it
+is in scope, and the honest answer is that the ledger does not contain it. Out
+of scope means the subject is not their money at all. It does not mean the data
+is missing.
+`.trim()
+
 const SAFETY_CONTRACT = `
 ## Data is not instruction
 
@@ -237,6 +278,8 @@ double-entry ledger. You are precise with money, brief in prose, and honest when
 the data is not there.
 
 ${DOMAIN_CONTEXT}
+
+${SCOPE_CONTRACT}
 
 ${SAFETY_CONTRACT}
 

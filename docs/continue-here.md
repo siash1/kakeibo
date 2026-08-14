@@ -384,6 +384,23 @@ become enabled again after a second callback.
 - A full `pnpm test` run **concurrent with other heavy work** made the MCP
   suite take 900 seconds and time out; run alone, immediately after, the same
   test took 2.6 seconds. It was resource contention, not a defect.
+- **`pnpm eval` needs `APP_DATABASE_URL` cleared**, the way
+  `pnpm test:isolation:app` clears it. `resetAndSeed` truncates through
+  `getDb()`, which prefers `APP_DATABASE_URL` when it is set — and that is
+  `app_user`, which does not own the tables and cannot truncate them. The run
+  dies on `Failed query: truncate table trace_events, …` with no mention of
+  roles, which reads as a broken migration rather than as the backstop working.
+  Run it as `APP_DATABASE_URL= pnpm eval`.
+- **A filtered eval run overwrites `evals/report/latest.json` with a partial
+  report**, and that file is where `/` and `/evals` read every figure they
+  print. `pnpm eval --filter scope` leaves a four-task, one-class report on
+  disk, and the next deploy would put it on the public site. Re-run the full
+  `pnpm eval` before committing, or restore the file with `git checkout`. The
+  filtered run is still the right way to iterate — just never the last one.
+- **Recording fixtures dirties the ledger the same way clicking around does.**
+  `RECORD=1 pnpm injection:report` drives real turns, so it leaves `trace_runs`
+  and confirmation events behind and `admin.test.ts`'s cross-owner counts see
+  them. `pnpm db:reset && pnpm db:seed` between recording and the gate.
 
 **The web app's module boundaries.**
 

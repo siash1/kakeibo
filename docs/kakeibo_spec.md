@@ -362,6 +362,20 @@ Why-it-works notes (these go in the README, and the builder should keep them tru
    a batch suspend together, and the reads' results are carried rather than
    re-run — which also stops the data shifting underneath the decision.
 
+**What is deliberately not on this list.** *Added 2026-08-14.* Every guardrail
+above acts on a **tool call**, never on the subject of a conversation. Nothing
+in the loop classifies, filters or routes a user's message: it is appended to
+the history verbatim, and the only content-based stop anywhere in the pipeline
+is the provider's own safety verdict on the response. So the agent staying on
+the subject of household money is a property of the system instruction's
+`## Scope` section alone, held by `evals/tasks/11-scope.yaml` and by nothing
+else. That is the right split rather than an omission: a topic classifier would
+be a second place for a decision to live, and none of the guarantees these five
+items make depend on what the visitor asked about. Talking the model onto
+another subject costs a fraction of a cent of the daily budget and reaches
+nothing — the write gate, the schema re-validation and the `data/` confinement
+hold identically whatever it is discussing.
+
 ### 8.7 Tracing
 
 Every model call and tool call writes a `trace_events` row (payload = request/response snapshot with tool args and truncated results); every turn writes/updates a `trace_runs` row with totals and `cost_usd_est` from `PRICING` (including explicit-cache storage cost, prorated). Tracing is synchronous and always on — it is the observability deliverable, not a debug flag.
@@ -412,7 +426,17 @@ checks:
 ```
 
 - **Check types**: `sql_equals`, `tool_was_called {name, args_subset?}`, `tool_not_called`, `no_unconfirmed_writes`, `response_contains`, `response_regex`, `judge {rubric}` (JUDGE_MODEL scores 1–5 with rationale; >=4 passes). Deterministic checks gate pass/fail; judge refines. Soft metrics recorded per task: wall latency, cost, turns, tokens.
-- **Coverage: >= 40 tasks**: categorization accuracy vs labels.json (x8, parameterized), reports/sums vs SQL oracle (x6), budget flows incl. a scripted deny (x4), recurring detection vs oracle (x2), anomaly detection vs oracle (x2), multi-turn memory recall (x3), multi-tool composition (x4), currency (x2), refusal-to-fabricate (asks about data that doesn't exist; judge checks it says so) (x3), injection suite (x6).
+- **Coverage: >= 40 tasks**: categorization accuracy vs labels.json (x8, parameterized), reports/sums vs SQL oracle (x6), budget flows incl. a scripted deny (x4), recurring detection vs oracle (x2), anomaly detection vs oracle (x2), multi-turn memory recall (x3), multi-tool composition (x4), currency (x2), refusal-to-fabricate (asks about data that doesn't exist; judge checks it says so) (x3), injection suite (x6), topic scope (x4).
+
+  *Amended 2026-08-14.* The **topic scope** class (`evals/tasks/11-scope.yaml`)
+  was added with the system instruction's `## Scope` section, and it is the only
+  thing holding that section: nothing in the loop inspects what a user asks, so
+  there is no architectural invariant to assert and therefore no replay-fixture
+  twin the way `tests/injection.test.ts` twins the injection class. Under
+  `REPLAY` the answer is whatever was recorded, so such a test would assert its
+  own fixture. Its fourth task exists to fail if the instruction is ever
+  over-tightened: an open-ended question about the visitor's own money is *in*
+  scope and must still be answered from the ledger.
 - **Runner**: `pnpm eval [--model X] [--filter glob]` → `evals/report/latest.{md,json}`: pass rate overall + per class, medians for latency/cost/turns, cache savings %, injection block rate, per-task table. `pnpm eval:smoke` = 8-task subset.
 - CI: replay-fixture tests on every push; live eval runs only via `workflow_dispatch` (paid API in CI otherwise).
 
