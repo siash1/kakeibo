@@ -7,19 +7,18 @@ or just say: **"Read docs/continue-here.md and start."**
 
 ## Where things stand
 
-kakeibo is a from-scratch Gemini agent over a double-entry ledger, live at
-`github.com/siash1/kakeibo`. It is being taken public in four plans plus a UI
-phase. **Plans A, B and C, the whole of Phase 2, and now Plan D are all
-written and built.** Plans A–C and Phase 2 are on `main`; **Plan D is built and
-green on the `plan-d` branch and has not been merged.**
+kakeibo is a from-scratch Gemini agent over a double-entry ledger. **It is
+finished, merged, and live at https://kakeibo.co.in.**
 
-**The site is live at https://kakeibo.co.in.** It was deployed on 2026-08-10 to
-a Hetzner box rather than to Vercel + Neon — see **`docs/deploy-hetzner.md`**,
-which is the runbook that was actually executed. `docs/deploy.md` remains the
-Vercel route and is untested.
+All four plans and the UI phase are on `main`, and `origin/main` matches. Plan D
+merged at `167f710` on 2026-08-10, and the deploy went to a Hetzner box rather
+than to Vercel + Neon — **`docs/deploy-hetzner.md`** is the runbook that was
+actually executed, `docs/deploy.md` is the Vercel route nobody has taken.
 
-What is left is one decision: `plan-d` has never been merged to `main` or
-pushed. The running site and that branch are the only two copies of this work.
+**There is no work queued.** What follows is the map, the decisions that are
+closed, and a short list of things deliberately left open at the bottom. Read
+that list before inventing work: most of what looks unfinished here is
+finished-by-decision, and the file says which.
 
 **Read first, in this order:**
 
@@ -129,10 +128,15 @@ told to overwrite, which would let a visitor forge their per-IP quota bucket;
 and `NEXT_PUBLIC_TURNSTILE_SITE_KEY` is inlined at build time, so it needs a
 rebuild rather than a restart.
 
-### Plan D — built, green, unmerged
+### Plan D — built, merged, deployed
 
-Branch `plan-d`, worktree `.worktrees/plan-d`, thirteen commits on top of
-`main`, and the exact code the live site is running.
+Sixteen commits, merged to `main` at `167f710` and pushed. The `plan-d` branch
+still exists on the remote as a record. `.worktrees/plan-d` is now only a way to
+serve a stale copy by accident — remove it when convenient:
+
+```bash
+git worktree remove .worktrees/plan-d && git branch -d plan-d
+```
 **The owner cut sign-up entirely on 2026-08-10**, so the scope was:
 
 | In | Out |
@@ -184,11 +188,17 @@ blocker.** See "The import path was an arbitrary file read" below.
 
 ### The gate, now
 
-`pnpm lint`, `pnpm typecheck`, **245 tests across 32 files plus the 15-test
+`pnpm lint`, `pnpm typecheck`, **250 tests across 32 files plus the 15-test
 second isolation pass**, `pnpm --filter @kakeibo/web build`,
 `pnpm injection:report` at 100%, and
 `node ~/.claude/skills/impeccable/scripts/detect.mjs --json <targets>` at zero
-findings. All green on `plan-d` as of 2026-08-10.
+findings. All green on `main` as of 2026-08-10.
+
+**If `pnpm typecheck` fails with `Cannot find module '../../../src/app/page.js'`,
+delete `apps/web/.next`.** That is stale generated route typing from before
+Phase 2 moved the pages into route groups; it is gitignored build cache, not
+source, and it bit once already on a checkout that had not been built in a
+while.
 
 ## Start here
 
@@ -693,12 +703,17 @@ Task 1: **there is no sign-up**, so the entry row's second half no longer holds
 and `/settings` is gone. The upload row survives as an intention rather than a
 description — see "Known and deliberately left".
 
-Decided during Plan D, 2026-08-10:
+Decided during Plan D and the deploy, 2026-08-10:
 
 | Question | Answer |
 | --- | --- |
 | The unsandboxed import file read | Confine `resolvePath` to `data/`, with a test. Keeps all twelve tools everywhere and fixes it for every caller at once |
 | What `/privacy` says about uploads | Keep the section as written, even though the web app has no upload |
+| Where the site runs | One Hetzner box, co-hosted with an unrelated project. Not Vercel + Neon |
+| Gemini auth in production | `apikey`. Explicit caching still works: a live turn measures ~90% of input served from cache |
+| **Turnstile** | **Declined.** The code stays, both keys empty, gate inert on server and client at once. Do not "fix" it |
+| The `/admin` map off Vercel | A local DB-IP city file, never a hosted lookup API. `/privacy` promises nothing leaves for anyone but Gemini, and that outranks a dot on a map |
+| **Em dashes in rendered copy** | **None.** Removed 2026-08-10 and rewritten rather than swapped for hyphens. Comments and direction contracts keep theirs; they are not the website |
 
 Decided during Plan B, and worth the same treatment:
 
@@ -728,6 +743,32 @@ $20/month is roughly 148 live turns a day, or 20–40 visitors. Past the cap the
 site falls back to replaying a recorded fixture conversation, which is free and
 unlimited. That ceiling is a deliberate choice, not an oversight — if the owner
 wants it raised they will say so.
+
+## Left open on purpose, with the reasoning
+
+Nothing here is queued work. Each one was looked at and left.
+
+- **`/runs` and `/admin` are the dark terminal genre.** The owner asked why they
+  "look un-updated"; they are un-updated by the Phase 2 decision (hard cut, two
+  grounds, one shared nav). The cheapest improvement if it still reads as broken
+  CSS is to make the nav say which room you are in, so the ground flip announces
+  itself. Restyling them to paper contradicts a recorded decision and would fight
+  dense machine output.
+- **`/privacy` and `/terms` are linked from the landing footer only.** No
+  site-wide footer exists, so a visitor on `/chat` reaches the delete control by
+  going back to `/`. A shared footer would touch four reviewed pages and
+  `/chat`'s sticky-composer geometry.
+- **The operator credentials are at `/root/kakeibo-operator.txt` on the server**
+  (0600). Save them and `shred -u` the file.
+- **`apps/web/PRODUCT.md` predates the current product-record schema.** Repaired
+  by `/impeccable init`, which is an interview.
+- **The inline-link underline is fixed on `/privacy` and `/terms` only.**
+  Tailwind preflight sets `text-decoration: inherit`, so the rule in
+  `globals.css` has never had an underline to offset and every other inline link
+  on the site renders undecorated. Fixing it globally means looking at four
+  reviewed pages at once.
+- **`docs/deploy.md` describes a Vercel deploy nobody has performed.** It is not
+  wrong, it is untested.
 
 ## The bar
 
