@@ -169,6 +169,8 @@ and the sweep does not care when it runs.
 rsync -az --delete \
   --exclude node_modules --exclude .next --exclude .git --exclude .env \
   --exclude .worktrees --exclude 'data/private' \
+  --exclude .pgdata --exclude .pgdata.log --exclude '*.tsbuildinfo' \
+  --exclude dist --exclude 'evals/report/runs' --exclude .brand-out \
   ./ root@<host>:/opt/kakeibo/app/
 
 ssh root@<host> '
@@ -182,6 +184,21 @@ ssh root@<host> '
 
 `--exclude .env` is required: it both protects the symlink from `--delete` and
 stops a local `.env` from overwriting production's.
+
+**rsync does not read `.gitignore`**, so every generated path has to be named
+here or it ships. `.pgdata` is the one that matters: `scripts/db-up.sh` falls
+back to a local Postgres cluster in `.pgdata/` when Docker is unavailable, so
+deploying from a machine without Docker rsyncs ~73 MB of live database files
+into the deploy directory. The first version of this list did not mention it
+because the original deploy ran from a Docker host, where the directory never
+exists. Dry-run first and read the deletions:
+
+```bash
+rsync -az --delete --dry-run --itemize-changes … | grep '^\*deleting'
+```
+
+Anything listed there that is not a file you meant to remove is a sign the
+exclude list is missing something.
 
 **`NEXT_PUBLIC_TURNSTILE_SITE_KEY` is inlined at build time.** Changing it in
 the environment does nothing until the app is rebuilt. Every other variable here
