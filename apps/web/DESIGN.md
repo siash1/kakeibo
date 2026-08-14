@@ -451,6 +451,22 @@ database waiting on the answer. It carries a serif heading in the visitor's term
 of the literal arguments, and two buttons. Money in the argument table shows the
 formatted amount first and the integer minor units beside it.
 
+**One slip per suspended turn, not per write.** A turn can propose several
+writes at once, and the loop suspends on the batch as a whole: the provider
+requires every call in a turn to be answered together, and the resume deletes
+the suspended row as it reads it. So the slip lists each proposed write with its
+own arguments under a `rule-strong` division and carries a single Allow / Decline
+pair reading "Allow all" when there is more than one. Rendering a pair of buttons
+per write offered a granularity the loop could not honour, and the page did
+exactly that until 2026-08-14: answering one write declined the others by
+omission, without showing them as declined.
+
+**The slip states an outcome only once the server has taken the decision.**
+Between the click and the response it reads "Sending your decision…", and a
+refusal returns it to pending rather than leaving it claiming a write that never
+ran. It is the one component on the site whose whole job is to be believed about
+the ledger.
+
 ### The Social Card (signature)
 
 `opengraph-image.jpg`, 1200×630, and the only place in the system where a

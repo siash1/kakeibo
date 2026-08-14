@@ -365,32 +365,93 @@ export function AccountLine({
  * that already happened, which is the opposite of what it is.
  */
 export function ConfirmSlip({
-  tool,
-  summary,
-  args,
+  writes,
   state,
   onAllow,
   onDecline,
 }: {
-  tool: string
-  summary: string
-  args: unknown
-  state: 'pending' | 'allowed' | 'declined'
+  /** Every write of one suspended turn. They are answered together or not at all. */
+  writes: { id: string; tool: string; summary: string; args: unknown }[]
+  state: 'pending' | 'sending' | 'allowed' | 'declined' | 'expired'
   onAllow?: () => void
   onDecline?: () => void
 }) {
-  const fields = args && typeof args === 'object' ? (args as Record<string, unknown>) : {}
+  if (writes.length === 0) return null
+  const many = writes.length > 1
 
   return (
     <section className="mt-4 border-y-2 border-sumi-900 py-5 lg:col-span-2">
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
         <h3 className="font-serif text-[17px] font-semibold tracking-[-0.01em]">
-          This will change your ledger
+          {many
+            ? `These ${writes.length} writes will change your ledger`
+            : 'This will change your ledger'}
         </h3>
-        <span className="text-[12px] uppercase tracking-[0.09em] text-sumi-600">{tool}</span>
+        <span className="text-[12px] uppercase tracking-[0.09em] text-sumi-600">
+          {many ? `${writes.length} writes` : writes[0]?.tool}
+        </span>
       </div>
 
-      <p className="mt-2 max-w-[62ch] text-[15px] leading-relaxed text-sumi-900">{summary}</p>
+      {/*
+        One decision covers the batch, so every write in it has to be readable
+        before the visitor answers: the loop suspends on all of them together
+        and there is no way to allow one and hold the rest.
+      */}
+      {writes.map((write) => (
+        <WriteProposal key={write.id} write={write} labelled={many} />
+      ))}
+
+      {state === 'pending' ? (
+        <div className="mt-5 flex flex-wrap items-center gap-x-3 gap-y-2">
+          <button
+            type="button"
+            onClick={onAllow}
+            className="bg-sumi-900 px-5 py-2 text-[13px] text-paper-50 transition-colors hover:bg-sumi-800"
+          >
+            {many ? 'Allow all' : 'Allow'}
+          </button>
+          <button
+            type="button"
+            onClick={onDecline}
+            className="border border-sumi-900 px-5 py-2 text-[13px] text-sumi-900 transition-colors hover:bg-paper-200"
+          >
+            {many ? 'Decline all' : 'Decline'}
+          </button>
+          <span className="text-[12px] text-sumi-500">The turn is paused until you decide.</span>
+        </div>
+      ) : (
+        <p className="mt-4 text-[13px] text-sumi-600">
+          {state === 'sending'
+            ? 'Sending your decision…'
+            : state === 'allowed'
+              ? 'Allowed. The turn resumed.'
+              : state === 'declined'
+                ? 'Declined. Nothing was written.'
+                : 'This confirmation expired before it was answered. Nothing was written. Ask again to start a fresh turn.'}
+        </p>
+      )}
+    </section>
+  )
+}
+
+/** One proposed write inside the slip: what it is, and its literal arguments. */
+function WriteProposal({
+  write,
+  labelled,
+}: {
+  write: { tool: string; summary: string; args: unknown }
+  labelled: boolean
+}) {
+  const fields =
+    write.args && typeof write.args === 'object' ? (write.args as Record<string, unknown>) : {}
+
+  return (
+    <div className={labelled ? 'mt-5 border-t border-rule-strong pt-4 first-of-type:mt-4' : ''}>
+      {labelled ? (
+        <span className="text-[12px] uppercase tracking-[0.09em] text-sumi-600">{write.tool}</span>
+      ) : null}
+
+      <p className="mt-2 max-w-[62ch] text-[15px] leading-relaxed text-sumi-900">{write.summary}</p>
 
       {Object.keys(fields).length > 0 ? (
         <dl className="mt-4 max-w-[42rem] border-t border-rule">
@@ -421,30 +482,6 @@ export function ConfirmSlip({
           })}
         </dl>
       ) : null}
-
-      {state === 'pending' ? (
-        <div className="mt-5 flex flex-wrap items-center gap-x-3 gap-y-2">
-          <button
-            type="button"
-            onClick={onAllow}
-            className="bg-sumi-900 px-5 py-2 text-[13px] text-paper-50 transition-colors hover:bg-sumi-800"
-          >
-            Allow
-          </button>
-          <button
-            type="button"
-            onClick={onDecline}
-            className="border border-sumi-900 px-5 py-2 text-[13px] text-sumi-900 transition-colors hover:bg-paper-200"
-          >
-            Decline
-          </button>
-          <span className="text-[12px] text-sumi-500">The turn is paused until you decide.</span>
-        </div>
-      ) : (
-        <p className="mt-4 text-[13px] text-sumi-600">
-          {state === 'allowed' ? 'Allowed. The turn resumed.' : 'Declined. Nothing was written.'}
-        </p>
-      )}
-    </section>
+    </div>
   )
 }

@@ -534,6 +534,26 @@ absence of one.
 - `executeToolUse` deliberately does not record a `confirm` trace event when the
   caller already ruled on the call. Two events for one decision doubles every
   "writes allowed" figure the admin dashboard reads off the timeline.
+- **`runTurn` declines by omission, so the page must answer for every write in
+  the batch.** `resume` builds `byId` from the decisions it is given and reads
+  `allowed = byId.get(item.id) === true`, so a pending write the client does not
+  name is not an error, it is a decline — and `takeSuspendedTurn` deletes the row
+  as it reads it, so there is no second chance to answer the rest. `/chat`
+  rendered one slip per write, each with its own Allow, and posted a single
+  decision: allowing one silently declined the others, and their slips kept live
+  buttons that could only ever answer 410 ("that confirmation had already
+  expired") on a turn that never expired. Fixed 2026-08-14 by grouping on
+  `suspendedTurnId` and deciding the batch as a whole; `apps/web/src/lib/confirm.ts`
+  holds the two functions and `confirm.test.ts` pins the two-write case, which is
+  the only case that was ever wrong.
+- **The slip must not claim an outcome before the server has taken it.** It
+  patched itself to "Allowed. The turn resumed." *before* the fetch and never
+  rolled back, while `consume` returned silently on a 503 — so a resume refused
+  for an operator pause, a block, or the global daily cap left the page asserting
+  a write that the server had not even read the suspended row for. `consume` now
+  returns `resumed | refused | expired` and the slip carries a `sending` state
+  between the click and the answer. A refusal returns it to pending, because the
+  suspended turn is still there and still answerable once the cap resets.
 - **A turn held at the gate has produced no prose and completed no tool calls.**
   Any UI that renders a turn has to handle that state explicitly or it draws two
   empty columns on the one screen whose whole job is to say the machinery

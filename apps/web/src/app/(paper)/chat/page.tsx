@@ -14,6 +14,7 @@ import {
 } from '@/components/exchange'
 import { Mark } from '@/components/ledger'
 import { mayAsk, TurnstileGate, turnstileSiteKey } from '@/components/turnstile-gate'
+import { type ConfirmGroup, decisionsFor, groupBySuspendedTurn } from '@/lib/confirm'
 
 /**
  * /chat — the agent, as a page of the account book.
@@ -65,8 +66,14 @@ interface ConfirmEvent {
   args: unknown
   /** Which paused turn this card belongs to; answering resumes exactly that one. */
   suspendedTurnId: string
-  answered?: boolean
-  allowed?: boolean
+  /**
+   * Undefined until the visitor answers. `sending` is the window in which the
+   * decision is in flight and nothing is yet true of the ledger: the slip used
+   * to skip it and assert the outcome before the request was made, so a resume
+   * refused for a pause or the daily cap left the page claiming a write had
+   * been allowed when the server had not even read the suspended row.
+   */
+  status?: 'sending' | 'allowed' | 'declined' | 'expired'
 }
 
 interface TextEvent {
@@ -189,21 +196,21 @@ export default function ChatPage() {
    * are two halves of one turn — the second picks up where the first suspended.
    */
   const consume = useCallback(
-    async (response: Response) => {
+    async (response: Response): Promise<'resumed' | 'refused' | 'expired'> => {
       if (response.status === 503) {
         const body = (await response.json()) as { error?: string }
         setLimited(body.error ?? 'Live chat is unavailable right now.')
-        return
+        return 'refused'
       }
       if (response.status === 410) {
         note('warn', 'That confirmation had already expired. Ask again to start a fresh turn.')
-        return
+        return 'expired'
       }
       if (response.status === 403) {
         // The gate, not the ledger: this is the one refusal that has nothing to
         // do with what was asked.
         setLimited('Verification failed. Reload the page and try again.')
-        return
+        return 'refused'
       }
       if (!response.ok) {
         const body = (await response.json().catch(() => ({}))) as { error?: string }
@@ -232,6 +239,10 @@ export default function ChatPage() {
           handleEvent(eventLine.slice(7), JSON.parse(dataLine.slice(6)))
         }
       }
+
+      // The stream ran to completion, so the server took the decision and the
+      // turn genuinely resumed. Only this answer entitles the slip to say so.
+      return 'resumed'
 
       function handleEvent(event: string, data: Record<string, unknown>) {
         if (event === 'token') {
@@ -306,31 +317,48 @@ export default function ChatPage() {
    * the original request — it ended when the turn suspended.
    */
   const answer = useCallback(
-    async (item: ConfirmEvent, allow: boolean) => {
+    async (group: ConfirmGroup<ConfirmEvent>, allow: boolean) => {
       if (busy) return
       setBusy(true)
-      patchLast((message) => ({
-        ...message,
-        items: message.items.map((existing) =>
-          existing.kind === 'confirm' && existing.id === item.id
-            ? { ...existing, answered: true, allowed: allow }
-            : existing,
-        ),
-      }))
+
+      const ids = new Set(group.writes.map((write) => write.id))
+      const setStatus = (status: ConfirmEvent['status']) =>
+        patchLast((message) => ({
+          ...message,
+          items: message.items.map((existing) =>
+            existing.kind === 'confirm' && ids.has(existing.id)
+              ? { ...existing, status }
+              : existing,
+          ),
+        }))
+
+      // In flight, which is not an outcome. The slip says so rather than
+      // announcing a write that the server has not agreed to yet.
+      setStatus('sending')
 
       try {
-        await consume(
+        const outcome = await consume(
           await fetch('/api/confirm', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              suspendedTurnId: item.suspendedTurnId,
-              decisions: [{ id: item.id, allowed: allow }],
+              suspendedTurnId: group.suspendedTurnId,
+              // Every write of the batch, because runTurn declines by omission
+              // and the loop cannot answer a batch piecemeal.
+              decisions: decisionsFor(group.writes, allow),
             }),
           }),
         )
+
+        if (outcome === 'resumed') setStatus(allow ? 'allowed' : 'declined')
+        // Refused: the suspended turn is untouched and still answerable once
+        // the pause lifts or the cap resets, so the slip goes back to pending
+        // rather than stranding the visitor with no control.
+        else if (outcome === 'refused') setStatus(undefined)
+        else setStatus('expired')
       } catch (error) {
         note('danger', error instanceof Error ? error.message : String(error))
+        setStatus(undefined)
       } finally {
         setBusy(false)
         follow(true)
@@ -497,7 +525,7 @@ function Entry({
 }: {
   message: Message
   pending: boolean
-  onAnswer: (item: ConfirmEvent, allow: boolean) => void
+  onAnswer: (group: ConfirmGroup<ConfirmEvent>, allow: boolean) => void
 }) {
   const prose = message.items.filter((item): item is TextEvent => item.kind === 'text')
   const tools = message.items.filter((item): item is ToolEvent => item.kind === 'tool')
@@ -511,7 +539,7 @@ function Entry({
    * screen whose whole job is to say the machinery stopped. The proposed write
    * posts as an entry and the book's column says why it is blank.
    */
-  const held = confirms.filter((item) => !item.answered)
+  const held = confirms.filter((item) => item.status === undefined || item.status === 'sending')
 
   return (
     <Spread>
@@ -581,15 +609,15 @@ function Entry({
         </Margin>
       ) : null}
 
-      {confirms.map((item) => (
+      {groupBySuspendedTurn(confirms).map((group) => (
         <ConfirmSlip
-          key={item.id}
-          tool={item.tool}
-          summary={item.summary}
-          args={item.args}
-          state={item.answered ? (item.allowed ? 'allowed' : 'declined') : 'pending'}
-          onAllow={() => onAnswer(item, true)}
-          onDecline={() => onAnswer(item, false)}
+          key={group.suspendedTurnId}
+          writes={group.writes}
+          // The batch is decided together, so its writes always share a status;
+          // the first is as good an answer as any.
+          state={group.writes[0]?.status ?? 'pending'}
+          onAllow={() => onAnswer(group, true)}
+          onDecline={() => onAnswer(group, false)}
         />
       ))}
     </Spread>
