@@ -118,7 +118,7 @@ directory, systemd unit, Postgres container and volume. Nothing is shared.
 | Sweep | `kakeibo-reap.timer`, 03:17 UTC — the only thing enforcing 24h retention |
 | GeoIP | `kakeibo-geoip.timer`, monthly, DB-IP city file at `/opt/kakeibo/geoip` |
 | Gemini | `apikey` mode. Vertex needs a service account; ADC does not exist on a server |
-| Turnstile | **present in the code and deliberately unconfigured.** The owner declined it on 2026-08-10. Both keys empty means the gate is inert on the server and invisible in the browser, which is a supported state, not a broken one |
+| Turnstile | **present in the code and deliberately unconfigured.** The owner declined it on 2026-08-10. Both keys empty means the gate is inert on the server and invisible in the browser, which is a supported state, not a broken one — though it took a client-side fix on 2026-08-14 to actually be inert rather than merely invisible |
 
 Four things cost time there and are written up in `docs/deploy-hetzner.md`:
 Docker's published ports bypass ufw entirely; `tests/setup.ts` loads `.env` from
@@ -318,6 +318,20 @@ constant token string**, so a local test cannot prove freshness by comparing
 values. What it can prove is that the widget's callback fired again: the turn
 clears the held token before it clears `busy`, so the submit button can only
 become enabled again after a second callback.
+
+**And that verification is why the same failure then shipped in the other
+configuration.** Two consecutive turns were checked with the test keys *set*,
+which is the one state where a widget exists to mint the second token. With the
+keys **empty** — the state the owner chose, and the one running in production —
+the widget renders `null` and no callback ever fires, so clearing the spent
+token in that same `finally` left the composer waiting on something that could
+not arrive. The site allowed exactly one question per page load from 2026-08-10
+until 2026-08-14, and the symptom was the one described above: it breaks on the
+second question only. `mayAsk` in `turnstile-gate.tsx` is now the single answer
+to "may a turn be sent", both the mount and the post-turn reset ask it, and
+`turnstile-gate.test.ts` walks two turns in **both** configurations. When a
+feature has an off state, the off state is a configuration to test, not the
+absence of one.
 
 **Looking at the UI.**
 
@@ -728,7 +742,7 @@ Decided during Plan D and the deploy, 2026-08-10:
 | What `/privacy` says about uploads | Keep the section as written, even though the web app has no upload |
 | Where the site runs | One Hetzner box, co-hosted with an unrelated project. Not Vercel + Neon |
 | Gemini auth in production | `apikey`. Explicit caching still works: a live turn measures ~90% of input served from cache |
-| **Turnstile** | **Declined.** The code stays, both keys empty, gate inert on server and client at once. Do not "fix" it |
+| **Turnstile** | **Declined.** The code stays, both keys empty, gate inert on server and client at once. Do not "fix" it. *The client half of that sentence was not true until 2026-08-14 — the composer gated every turn after the first on a token no widget existed to issue. Making the code match this row is not reopening the decision; the decision is what says the code was wrong.* |
 | The `/admin` map off Vercel | A local DB-IP city file, never a hosted lookup API. `/privacy` promises nothing leaves for anyone but Gemini, and that outranks a dot on a map |
 | **Em dashes in rendered copy** | **None.** Removed 2026-08-10 and rewritten rather than swapped for hyphens. Comments and direction contracts keep theirs; they are not the website |
 

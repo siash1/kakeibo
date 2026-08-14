@@ -46,7 +46,7 @@ command. Nothing here is an estimate.
 | Median / p95 turn latency | **15.8 s** / **26.7 s** | `pnpm eval` |
 | Median cost per eval task | **$0.0098** (list price) | `pnpm eval` |
 | Context estimate error vs `countTokens` | **3.1% mean absolute** | `pnpm metrics` |
-| Tests | **250** across 32 files, plus the isolation suite a second time with RLS bypassed (15 more); no API key and no network | `pnpm test` |
+| Tests | **252** across 33 files, plus the isolation suite a second time with RLS bypassed (15 more); no API key and no network | `pnpm test` |
 | Tools | 12 | `pnpm cli` then `/help` |
 | Core loop | **496 lines** of code (`packages/core/src/loop.ts`, 649 with comments) | `pnpm metrics` |
 
@@ -55,7 +55,7 @@ from Google's published Vertex pricing. They are useful as *relative* numbers â€
 cached versus uncached, Flash versus Pro â€” which is what they are used for.
 
 The Tests row cites `pnpm test`, which is vitest's own runtime count.
-`pnpm metrics` prints a lower number for the same 32 files (237, not 250): it
+`pnpm metrics` prints a lower number for the same 33 files (239, not 252): it
 is a static `grep` for `it(`/`test(` declarations, and `isolation.test.ts`
 builds several tests from a table at runtime that the grep only sees once.
 Both figures are real; they are answers to different questions, not a

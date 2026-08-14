@@ -39,6 +39,26 @@ declare global {
  */
 export const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? ''
 
+/**
+ * Whether a turn may be sent yet.
+ *
+ * With a site key, a turn needs a fresh single-use token and the composer waits
+ * for one between turns. With no site key there is no widget, no callback and
+ * therefore no token that will ever arrive, so the only correct answer is yes.
+ *
+ * It takes the key as an argument rather than reading the module constant so a
+ * test can ask both questions; it exists as a function at all because asking it
+ * in one place and forgetting it in another is not a hypothetical. The composer
+ * seeded its state with the unconfigured case and then cleared that same state
+ * after every turn without it, which gated the second question of every session
+ * on a token that could not exist — live, on a site whose Turnstile keys are
+ * deliberately empty, from 2026-08-10 until it was found by asking a second
+ * question. Both call sites now ask this.
+ */
+export function mayAsk(siteKey: string, token: string | undefined): boolean {
+  return siteKey === '' || token !== undefined
+}
+
 export function TurnstileGate({
   onToken,
   refreshKey = 0,

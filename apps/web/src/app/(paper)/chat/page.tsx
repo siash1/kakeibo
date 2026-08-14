@@ -13,7 +13,7 @@ import {
   TurnAccount,
 } from '@/components/exchange'
 import { Mark } from '@/components/ledger'
-import { TurnstileGate, turnstileSiteKey } from '@/components/turnstile-gate'
+import { mayAsk, TurnstileGate, turnstileSiteKey } from '@/components/turnstile-gate'
 
 /**
  * /chat — the agent, as a page of the account book.
@@ -141,11 +141,11 @@ export default function ChatPage() {
    */
   const turnstileToken = useRef<string | undefined>(undefined)
   const [turnstileGeneration, setTurnstileGeneration] = useState(0)
-  const [verified, setVerified] = useState(turnstileSiteKey === '')
+  const [verified, setVerified] = useState(mayAsk(turnstileSiteKey, undefined))
 
   const holdToken = useCallback((token: string | undefined) => {
     turnstileToken.current = token
-    setVerified(token !== undefined)
+    setVerified(mayAsk(turnstileSiteKey, token))
   }, [])
 
   /**
